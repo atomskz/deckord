@@ -1,9 +1,14 @@
 import { loadConfig } from './config/index';
+import { FileSettingsStore, mergeConfig, settingsPath } from './config/settings';
 import { configureLogging } from './logging/index';
 import { DeckordService } from './DeckordService';
 
 async function main(): Promise<void> {
-  const config = loadConfig();
+  // Base config from environment defaults, overlaid with the persisted settings.json
+  // the config UI writes (Phase 9), so configuration survives restarts.
+  const base = loadConfig();
+  const settingsStore = new FileSettingsStore(settingsPath(base.dataDir));
+  const config = mergeConfig(base, await settingsStore.load());
   const log = configureLogging(config.logLevel);
 
   log.info(`Starting ${config.appName} service (provider preference: ${config.provider})`);

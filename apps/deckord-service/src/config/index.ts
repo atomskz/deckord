@@ -28,6 +28,8 @@ export type DeckordConfig = {
     path: string;
     iconSize: number;
   };
+  /** Root data directory (settings.json, secrets, token, avatars live under here). */
+  dataDir: string;
   /** Where the Discord OAuth token is persisted (Phase 9 → OS-secured store). */
   discordTokenPath: string;
   /** Directory where downloaded avatars are cached. */
@@ -86,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DeckordConfig 
       path: env.DECKORD_OPENDECK_PATH ?? '/opendeck',
       iconSize: num(env.DECKORD_OPENDECK_ICON, 96),
     },
+    dataDir,
     discordTokenPath: env.DECKORD_TOKEN_PATH ?? path.join(dataDir, 'discord-token.json'),
     avatarCacheDir: env.DECKORD_AVATAR_DIR ?? path.join(dataDir, 'avatars'),
     mock: {
