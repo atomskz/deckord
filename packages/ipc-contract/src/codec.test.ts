@@ -101,6 +101,68 @@ describe('encode/decodeClientMessage', () => {
   });
 });
 
+describe('config messages (Phase 9)', () => {
+  it('round-trips a service config message', () => {
+    const message: ServiceToClientMessage = {
+      type: 'config',
+      payload: {
+        settings: {
+          provider: 'discord-rpc',
+          logLevel: 'info',
+          discord: { clientId: '123456789' },
+          openDeck: { enabled: true, port: 8788 },
+        },
+        secrets: { hasClientSecret: true, hasToken: false },
+        runtime: { provider: 'mock', restartRequired: true, dataDir: '/home/u/.deckord' },
+      },
+    };
+    const result = decodeServiceMessage(encode(message));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.value).toEqual(message);
+  });
+
+  it('round-trips set_config with settings and secrets', () => {
+    const message: ClientToServiceMessage = {
+      type: 'set_config',
+      payload: {
+        settings: { discord: { clientId: 'abc' }, ws: { port: 8799 } },
+        secrets: { clientSecret: 'shh', clearToken: true },
+      },
+    };
+    const result = decodeClientMessage(encode(message));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.value).toEqual(message);
+  });
+
+  it('round-trips get_config / connect_discord / restart_service', () => {
+    for (const type of ['get_config', 'connect_discord', 'restart_service'] as const) {
+      const result = decodeClientMessage(encode({ type }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('expected ok');
+      expect(result.value).toEqual({ type });
+    }
+  });
+
+  it('strips unknown keys from settings rather than rejecting', () => {
+    const result = decodeClientMessage(
+      JSON.stringify({ type: 'set_config', payload: { settings: { provider: 'mock', bogus: 1 } } }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    if (result.value.type !== 'set_config') throw new Error('expected set_config');
+    expect(result.value.payload.settings).toEqual({ provider: 'mock' });
+  });
+
+  it('rejects an out-of-range port in set_config', () => {
+    const result = decodeClientMessage(
+      JSON.stringify({ type: 'set_config', payload: { settings: { ws: { port: 70000 } } } }),
+    );
+    expect(result.ok).toBe(false);
+  });
+});
+
 describe('decode error handling', () => {
   it('returns err with code IPC_MESSAGE_INVALID for invalid JSON', () => {
     const result = decodeClientMessage('{ not valid json');

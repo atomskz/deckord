@@ -1,8 +1,13 @@
 import type { z } from 'zod';
 import type {
   ClientToServiceMessageSchema,
+  ConfigPayloadSchema,
+  DeckordSettingsSchema,
+  LogLevelSchema,
   MockCommandSchema,
+  ProviderPreferenceSchema,
   ServiceToClientMessageSchema,
+  SetConfigPayloadSchema,
   StatusLevelSchema,
 } from './schemas';
 
@@ -16,6 +21,13 @@ export const DEFAULT_WS_PATH = '/deck';
 
 export type StatusLevel = z.infer<typeof StatusLevelSchema>;
 export type MockCommand = z.infer<typeof MockCommandSchema>;
+
+/** Config domain (Phase 9). */
+export type LogLevelWire = z.infer<typeof LogLevelSchema>;
+export type ProviderPreferenceWire = z.infer<typeof ProviderPreferenceSchema>;
+export type DeckordSettings = z.infer<typeof DeckordSettingsSchema>;
+export type ConfigPayload = z.infer<typeof ConfigPayloadSchema>;
+export type SetConfigPayload = z.infer<typeof SetConfigPayloadSchema>;
 
 /** service → debug UI. */
 export type ServiceToClientMessage = z.infer<typeof ServiceToClientMessageSchema>;

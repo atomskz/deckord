@@ -100,6 +100,83 @@ export const DeckLayoutSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Config domain (Phase 9) — user-editable settings that cross the WS boundary.
+// This is BOTH the wire contract for the config UI and the shape the service
+// persists to settings.json (secrets are handled separately, never here).
+// ---------------------------------------------------------------------------
+
+export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
+export const ProviderPreferenceSchema = z.enum(['auto', 'mock', 'discord-rpc']);
+
+/**
+ * The editable subset of the service config. Every field is optional: an absent
+ * field keeps the env/default value (see mergeConfig). Unknown keys are stripped
+ * (default Zod object behavior), so a hand-edited settings.json can't inject
+ * arbitrary config. NEVER put secrets here — client secret / access token live in
+ * the SecretStore and cross the wire only as one-way writes (see set_config).
+ */
+export const DeckordSettingsSchema = z.object({
+  appName: z.string().min(1).max(64).optional(),
+  logLevel: LogLevelSchema.optional(),
+  provider: ProviderPreferenceSchema.optional(),
+  deckAdapter: z.string().min(1).max(64).optional(),
+  ws: z
+    .object({
+      host: z.string().min(1).optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      token: z.string().optional(),
+    })
+    .optional(),
+  discord: z
+    .object({
+      clientId: z.string().max(64).optional(),
+      redirectUri: z.string().max(512).optional(),
+    })
+    .optional(),
+  openDeck: z
+    .object({
+      enabled: z.boolean().optional(),
+      host: z.string().min(1).optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      iconSize: z.number().int().min(16).max(512).optional(),
+    })
+    .optional(),
+  mock: z
+    .object({
+      autoStart: z.boolean().optional(),
+      initialUsers: z.number().int().min(0).max(64).optional(),
+      speakingIntervalMs: z.number().int().min(100).max(60_000).optional(),
+    })
+    .optional(),
+});
+
+/** service → UI: the current effective settings plus runtime status. */
+export const ConfigPayloadSchema = z.object({
+  settings: DeckordSettingsSchema,
+  /** Presence flags only — the secret values themselves are never sent back. */
+  secrets: z.object({ hasClientSecret: z.boolean(), hasToken: z.boolean() }),
+  runtime: z.object({
+    provider: VoiceProviderKindSchema,
+    /** True when persisted settings differ from what the running service loaded. */
+    restartRequired: z.boolean(),
+    dataDir: z.string(),
+  }),
+});
+
+/** UI → service: write settings and/or secrets (loopback only). */
+export const SetConfigPayloadSchema = z.object({
+  settings: DeckordSettingsSchema.optional(),
+  secrets: z
+    .object({
+      clientSecret: z.string().optional(),
+      accessToken: z.string().optional(),
+      /** Forget the stored Discord token (e.g. "Disconnect"). */
+      clearToken: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+// ---------------------------------------------------------------------------
 // Wire messages
 // ---------------------------------------------------------------------------
 
@@ -124,6 +201,7 @@ export const ServiceToClientMessageSchema = z.discriminatedUnion('type', [
       code: z.string().optional(),
     }),
   }),
+  z.object({ type: z.literal('config'), payload: ConfigPayloadSchema }),
 ]);
 
 export const MockCommandSchema = z.enum([
@@ -148,6 +226,13 @@ export const ClientToServiceMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('mock_command'),
     payload: z.object({ command: MockCommandSchema, userId: z.string().optional() }),
   }),
+  // --- config (Phase 9) ---
+  z.object({ type: z.literal('get_config') }),
+  z.object({ type: z.literal('set_config'), payload: SetConfigPayloadSchema }),
+  /** Set provider = discord-rpc and restart into it (interactive AUTHORIZE). */
+  z.object({ type: z.literal('connect_discord') }),
+  /** Apply pending settings by restarting the service pipeline. */
+  z.object({ type: z.literal('restart_service') }),
 ]);
 
 // ---------------------------------------------------------------------------
