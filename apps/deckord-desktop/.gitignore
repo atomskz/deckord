@@ -1,0 +1,6 @@
+dist/
+renderer/
+release/
+assets/*.png
+assets/*.ico
+assets/*.icns

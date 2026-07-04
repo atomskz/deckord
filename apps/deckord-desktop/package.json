@@ -1,0 +1,26 @@
+{
+  "name": "deckord-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deckord desktop shell (Electron): runs the service in-process, tray + config window.",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "compile": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/main.cjs --sourcemap",
+    "renderer": "pnpm --filter deckord-debug-deck build && node -e \"require('fs').rmSync('renderer',{recursive:true,force:true});require('fs').cpSync('../deckord-debug-deck/dist','renderer',{recursive:true})\"",
+    "prepare:app": "pnpm run compile && pnpm run renderer",
+    "start": "pnpm run prepare:app && electron .",
+    "pack": "pnpm run prepare:app && electron-builder --dir",
+    "dist": "pnpm run prepare:app && electron-builder"
+  },
+  "dependencies": {
+    "deckord-service": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "deckord-debug-deck": "workspace:*",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.23.0",
+    "typescript": "^5.7.2"
+  }
+}

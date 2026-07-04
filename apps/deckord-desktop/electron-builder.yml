@@ -1,0 +1,35 @@
+appId: io.github.atomskz.deckord
+productName: Deckord
+copyright: Copyright © 2026 atomskz
+
+directories:
+  output: release
+  buildResources: assets
+
+# What goes into the packaged app. The service is bundled into dist/main.cjs by
+# esbuild (pnpm run compile); the UI is copied to ./renderer (pnpm run renderer).
+files:
+  - dist/**
+  - renderer/**
+  - assets/**
+  - package.json
+
+# Deckord starts hidden in the tray and stays resident.
+win:
+  target:
+    - nsis
+  # signing: set CSC_LINK / CSC_KEY_PASSWORD (Authenticode) in CI — TODO (Phase 9).
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+  # notarization: set APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID — TODO.
+linux:
+  target:
+    - AppImage
+  category: Utility
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

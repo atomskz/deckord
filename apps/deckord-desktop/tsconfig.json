@@ -1,0 +1,9 @@
+{
+  "//": "Editor/manual typecheck config. Not wired into the root `pnpm typecheck` because it needs Electron installed (see README). Run `pnpm --filter deckord-desktop exec tsc --noEmit -p tsconfig.json` after installing deps.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "electron"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}
