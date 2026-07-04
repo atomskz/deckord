@@ -10,9 +10,11 @@
     "build": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@deckord/adapter-opendeck": "workspace:*",
     "@deckord/deck-adapter": "workspace:*",
     "@deckord/deck-core": "workspace:*",
     "@deckord/discord-rpc": "workspace:*",
+    "@deckord/image-renderer": "workspace:*",
     "@deckord/ipc-contract": "workspace:*",
     "@deckord/renderer": "workspace:*",
     "@deckord/shared": "workspace:*",

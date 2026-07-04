@@ -20,6 +20,14 @@ export type DeckordConfig = {
     token?: string;
   };
   discord: DiscordRpcConfig;
+  /** Loopback endpoint the OpenDeck relay plugin connects to (Variant B). */
+  openDeck: {
+    enabled: boolean;
+    host: string;
+    port: number;
+    path: string;
+    iconSize: number;
+  };
   /** Where the Discord OAuth token is persisted (Phase 9 → OS-secured store). */
   discordTokenPath: string;
   /** Directory where downloaded avatars are cached. */
@@ -70,6 +78,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DeckordConfig 
       accessToken,
       scopes: MVP_SCOPES,
       redirectUri: env.DISCORD_REDIRECT_URI,
+    },
+    openDeck: {
+      enabled: env.DECKORD_DECK_ADAPTER === 'opendeck' || bool(env.DECKORD_OPENDECK, false),
+      host: env.DECKORD_OPENDECK_HOST ?? '127.0.0.1',
+      port: num(env.DECKORD_OPENDECK_PORT, 8788),
+      path: env.DECKORD_OPENDECK_PATH ?? '/opendeck',
+      iconSize: num(env.DECKORD_OPENDECK_ICON, 96),
     },
     discordTokenPath: env.DECKORD_TOKEN_PATH ?? path.join(dataDir, 'discord-token.json'),
     avatarCacheDir: env.DECKORD_AVATAR_DIR ?? path.join(dataDir, 'avatars'),

@@ -4,6 +4,7 @@ import {
   DebugBrowserDeckFactory,
   type DeckCapabilities,
 } from '@deckord/deck-adapter';
+import { OpenDeckFactory } from '@deckord/adapter-opendeck';
 import { DEFAULT_SLOT_CONFIG, SlotManager } from '@deckord/deck-core';
 import { DEFAULT_THEME, renderLayout, toRenderedSlot, type RenderContext } from '@deckord/renderer';
 import type { MockCommand } from '@deckord/ipc-contract';
@@ -12,10 +13,12 @@ import {
   type DeckButtonEvent,
   type DeckLayout,
   type Logger,
+  type RenderedDeckSlot,
   type VoiceChannelState,
 } from '@deckord/shared';
 import type { DeckordConfig } from './config/index';
 import { AvatarCache } from './avatars/AvatarCache';
+import { OpenDeckWsLink } from './opendeck/OpenDeckWsLink';
 import { slotConfigFromCapabilities } from './slotConfig';
 import { WsServer, type WsClient } from './server/WsServer';
 import { VoiceService } from './voice/VoiceService';
@@ -36,8 +39,16 @@ export class DeckordService {
   private readonly adapters: DeckAdapterRegistry;
   private host: DeckAdapterHost | undefined;
   private readonly avatars: AvatarCache;
+  private readonly openDeckLink: OpenDeckWsLink | undefined;
 
   private renderedLayout: DeckLayout | null = null;
+
+  /** Avatar bytes for a physical-deck rasterizer (OpenDeck): the cached local file. */
+  private readonly resolveDeckAvatar = async (slot: RenderedDeckSlot): Promise<string | undefined> => {
+    if (!slot.userId) return undefined;
+    const user = this.voice.getState().users.find((u) => u.userId === slot.userId);
+    return user ? this.avatars.localPath(user) : undefined;
+  };
 
   constructor(
     private readonly config: DeckordConfig,
@@ -60,6 +71,19 @@ export class DeckordService {
     );
 
     this.voice = new VoiceService(config, log.child('voice'));
+
+    // OpenDeck (Variant B): a loopback endpoint the relay plugin connects to. Only
+    // wired when opted in, so we don't open a port for the debug-only default.
+    if (config.openDeck.enabled) {
+      this.openDeckLink = new OpenDeckWsLink(config.openDeck, log.child('opendeck'));
+      this.adapters.register(
+        new OpenDeckFactory(this.openDeckLink, {
+          theme: DEFAULT_THEME,
+          iconSize: config.openDeck.iconSize,
+          resolveAvatar: this.resolveDeckAvatar,
+        }),
+      );
+    }
   }
 
   async start(): Promise<void> {
@@ -94,6 +118,7 @@ export class DeckordService {
     this.voice.onStatus((status) => this.broadcastStatus(status));
 
     await host.start();
+    await this.openDeckLink?.start(); // after the adapter is created, so frames aren't missed
     await this.ws.start();
     await this.voice.start();
     this.refreshDeck(this.voice.getState());
@@ -103,6 +128,7 @@ export class DeckordService {
   async stop(): Promise<void> {
     await this.voice.stop();
     await this.host?.stop();
+    await this.openDeckLink?.stop();
     await this.ws.close();
     this.log.info('Deckord service stopped');
   }

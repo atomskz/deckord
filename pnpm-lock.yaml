@@ -72,6 +72,9 @@ importers:
 
   apps/deckord-service:
     dependencies:
+      '@deckord/adapter-opendeck':
+        specifier: workspace:*
+        version: link:../../packages/adapter-opendeck
       '@deckord/deck-adapter':
         specifier: workspace:*
         version: link:../../packages/deck-adapter
@@ -81,6 +84,9 @@ importers:
       '@deckord/discord-rpc':
         specifier: workspace:*
         version: link:../../packages/discord-rpc
+      '@deckord/image-renderer':
+        specifier: workspace:*
+        version: link:../../packages/image-renderer
       '@deckord/ipc-contract':
         specifier: workspace:*
         version: link:../../packages/ipc-contract

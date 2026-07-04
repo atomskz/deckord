@@ -4,10 +4,11 @@
  */
 export class PageManager {
   constructor(private readonly perPage: number) {
-    if (perPage < 1) throw new RangeError('PageManager perPage must be >= 1');
+    if (perPage < 0) throw new RangeError('PageManager perPage must be >= 0');
   }
 
   pageCount(totalItems: number): number {
+    if (this.perPage <= 0) return 1; // no per-page capacity → a single (empty) page
     return Math.max(1, Math.ceil(totalItems / this.perPage));
   }
 
@@ -18,6 +19,7 @@ export class PageManager {
   }
 
   slice<T>(items: T[], page: number): T[] {
+    if (this.perPage <= 0) return [];
     const clamped = this.clamp(page, items.length);
     const start = clamped * this.perPage;
     return items.slice(start, start + this.perPage);

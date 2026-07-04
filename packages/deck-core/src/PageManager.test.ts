@@ -3,14 +3,20 @@ import { PageManager } from './PageManager';
 
 describe('PageManager', () => {
   describe('constructor', () => {
-    it('throws when perPage is less than 1', () => {
-      expect(() => new PageManager(0)).toThrow(RangeError);
+    it('throws when perPage is negative', () => {
       expect(() => new PageManager(-3)).toThrow(RangeError);
     });
 
-    it('accepts perPage of 1 or greater', () => {
+    it('accepts perPage of 0 or greater', () => {
+      expect(() => new PageManager(0)).not.toThrow();
       expect(() => new PageManager(1)).not.toThrow();
       expect(() => new PageManager(10)).not.toThrow();
+    });
+
+    it('treats perPage 0 as a single empty page', () => {
+      const pm = new PageManager(0);
+      expect(pm.pageCount(5)).toBe(1);
+      expect(pm.slice([1, 2, 3], 0)).toEqual([]);
     });
   });
 

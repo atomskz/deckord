@@ -34,6 +34,8 @@ export class SlotManager {
     for (let i = 0; i < this.slotCount; i++) {
       if (i !== config.statusSlotIndex) this.userSlotIndices.push(i);
     }
+    // A deck can have 0 user slots (an OpenDeck with no keys assigned yet, or a lone
+    // status slot); PageManager handles perPage === 0 as a single empty page.
     this.pages = new PageManager(this.userSlotIndices.length);
   }
 
