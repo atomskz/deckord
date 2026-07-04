@@ -1,0 +1,6 @@
+title: Deckord
+description: Show your Discord voice channel on a macro deck.
+theme: jekyll-theme-cayman
+# GitHub Pages for this project is served from /docs on the default branch.
+# Only files with YAML front-matter are rendered by Jekyll (index.md); the other
+# docs are plain Markdown, linked out to GitHub where they render natively.
