@@ -68,13 +68,27 @@ export type RawDiscordUser = {
   bot?: boolean;
 };
 
+/**
+ * The mute/deaf flags Discord actually nests under `voice_state` on each voice
+ * participant (confirmed against a live client — they are NOT top-level).
+ */
+export type RawVoiceStateFlags = {
+  mute?: boolean;
+  deaf?: boolean;
+  self_mute?: boolean;
+  self_deaf?: boolean;
+  suppress?: boolean;
+};
+
 export type RawVoiceState = {
   nick?: string;
-  mute: boolean;
-  deaf: boolean;
-  self_mute: boolean;
-  self_deaf: boolean;
-  suppress: boolean;
+  /** Nested flags (canonical). Top-level mute/deaf are kept as a legacy fallback. */
+  voice_state?: RawVoiceStateFlags;
+  mute?: boolean;
+  deaf?: boolean;
+  self_mute?: boolean;
+  self_deaf?: boolean;
+  suppress?: boolean;
   user: RawDiscordUser;
   volume?: number;
 };
@@ -85,9 +99,15 @@ export function discordAvatarUrl(userId: string, avatarHash: string | null | und
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${ext}?size=128`;
 }
 
-/** Normalize a raw RPC voice state into Deckord's provider-agnostic VoiceUser. */
+/**
+ * Normalize a raw RPC voice state into Deckord's provider-agnostic VoiceUser.
+ * Reads the flags from `voice_state` (with a top-level legacy fallback) and
+ * defaults every boolean to `false`, so a missing field never produces an
+ * `undefined` that would fail the wire schema.
+ */
 export function normalizeVoiceState(raw: RawVoiceState, isSpeaking = false): VoiceUser {
   const displayName = raw.nick || raw.user.global_name || raw.user.username;
+  const vs = raw.voice_state ?? {};
   return {
     userId: raw.user.id,
     username: raw.user.username,
@@ -95,11 +115,11 @@ export function normalizeVoiceState(raw: RawVoiceState, isSpeaking = false): Voi
     avatarHash: raw.user.avatar ?? undefined,
     avatarUrl: discordAvatarUrl(raw.user.id, raw.user.avatar),
     isSpeaking,
-    selfMute: raw.self_mute,
-    serverMute: raw.mute,
-    selfDeaf: raw.self_deaf,
-    serverDeaf: raw.deaf,
-    suppress: raw.suppress,
+    selfMute: vs.self_mute ?? raw.self_mute ?? false,
+    serverMute: vs.mute ?? raw.mute ?? false,
+    selfDeaf: vs.self_deaf ?? raw.self_deaf ?? false,
+    serverDeaf: vs.deaf ?? raw.deaf ?? false,
+    suppress: vs.suppress ?? raw.suppress ?? false,
     volume: raw.volume,
   };
 }
