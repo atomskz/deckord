@@ -36,6 +36,7 @@ export class DeckSocket {
     this.ws = ws;
 
     ws.onopen = () => {
+      console.info('[deckord] websocket open →', this.url);
       this.handlers.onStatus('open');
       this.send({ type: 'hello', payload: { client: 'debug-deck', version: `0.1.0/${IPC_PROTOCOL_VERSION}` } });
     };
@@ -43,14 +44,19 @@ export class DeckSocket {
     ws.onmessage = (event: MessageEvent<string>) => {
       const result = decodeServiceMessage(String(event.data));
       if (result.ok) this.handlers.onMessage(result.value);
+      else console.warn('[deckord] dropped invalid message:', result.error.message);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
+      console.warn(
+        `[deckord] websocket closed (code=${event.code}${event.reason ? `, reason=${event.reason}` : ''})`,
+      );
       this.handlers.onStatus('closed');
       this.scheduleReconnect();
     };
 
-    ws.onerror = () => {
+    ws.onerror = (event) => {
+      console.error('[deckord] websocket error', event);
       ws.close();
     };
   }

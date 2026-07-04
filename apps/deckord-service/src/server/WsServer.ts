@@ -113,10 +113,9 @@ export class WsServer implements DeckWire {
     this.clients.set(id, ws);
     this.log.info(`Debug deck connected (client #${id}), ${this.clients.size} total`);
 
-    // Send the snapshot synchronously on accept so it precedes any broadcast
+    // Send a snapshot synchronously on accept so it precedes any broadcast
     // (the mock speaking timer may fire before the client's `hello` arrives).
-    const client = this.makeClient(id);
-    if (client) this.connectHandlers.forEach((h) => h(client));
+    this.notifyConnect(id);
 
     ws.on('message', (data) => this.handleMessage(id, data));
     ws.on('close', () => {
@@ -148,10 +147,13 @@ export class WsServer implements DeckWire {
   private route(clientId: number, message: ClientToServiceMessage): void {
     switch (message.type) {
       case 'hello':
-        // Snapshot is already sent on accept; `hello` is just version negotiation.
+        // Re-send the snapshot on hello too: this is the frame the client sends
+        // once its socket is fully open, so it guarantees the *live* socket gets a
+        // snapshot even if the connect-time one landed on an abandoned socket.
         this.log.info(
           `Client #${clientId} hello (${message.payload.client} v${message.payload.version})`,
         );
+        this.notifyConnect(clientId);
         break;
       case 'button_down':
         this.buttonHandlers.forEach((h) => h({ kind: 'down', slotIndex: message.payload.slotIndex }));
@@ -163,6 +165,11 @@ export class WsServer implements DeckWire {
         this.mockHandlers.forEach((h) => h(message.payload.command, message.payload.userId));
         break;
     }
+  }
+
+  private notifyConnect(clientId: number): void {
+    const client = this.makeClient(clientId);
+    if (client) this.connectHandlers.forEach((h) => h(client));
   }
 
   private makeClient(clientId: number): WsClient | null {
