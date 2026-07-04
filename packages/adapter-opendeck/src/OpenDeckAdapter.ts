@@ -38,6 +38,7 @@ export class OpenDeckAdapter implements IDeckAdapter {
   private readonly devices = new Map<string, ElgatoDeviceInfo>();
   private readonly contexts = new Map<string, ContextInfo>();
   private keypadOrder: string[] = []; // slotIndex → context
+  private lastKnobCount = 0;
 
   private readonly downHandlers: DeckButtonHandler[] = [];
   private readonly upHandlers: DeckButtonHandler[] = [];
@@ -104,9 +105,14 @@ export class OpenDeckAdapter implements IDeckAdapter {
   async setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void> {
     const context = this.keypadOrder[slotIndex];
     if (!context) return; // no key assigned at this index
-    const avatar = this.resolveAvatar ? await this.resolveAvatar(slot) : undefined;
-    const dataUrl = await this.images.renderToDataUrl(slot, avatar);
-    this.transport.setImage(context, dataUrl);
+    try {
+      const avatar = this.resolveAvatar ? await this.resolveAvatar(slot) : undefined;
+      const dataUrl = await this.images.renderToDataUrl(slot, avatar);
+      this.transport.setImage(context, dataUrl);
+    } catch {
+      // A per-slot avatar/rasterize failure must not abort the host's batch (it
+      // awaits setSlot for every changed slot); skip this key, repaint next update.
+    }
   }
 
   async clearSlot(slotIndex: number): Promise<void> {
@@ -139,13 +145,18 @@ export class OpenDeckAdapter implements IDeckAdapter {
   private recompute(): void {
     const order = [...this.contexts.entries()]
       .filter(([, info]) => info.controller === 'Keypad')
-      .sort(([, a], [, b]) => byCoordinates(a, b))
+      // Sort by (row, column); break ties deterministically by context id so the
+      // order is stable even if the host re-emits willAppear in a different order.
+      .sort(([ctxA, a], [ctxB, b]) => byCoordinates(a, b) || (ctxA < ctxB ? -1 : ctxA > ctxB ? 1 : 0))
       .map(([context]) => context);
+    const knobCount = [...this.contexts.values()].filter((c) => c.controller === 'Encoder').length;
 
-    const changed =
+    const orderChanged =
       order.length !== this.keypadOrder.length || order.some((c, i) => c !== this.keypadOrder[i]);
+    const knobChanged = knobCount !== this.lastKnobCount;
     this.keypadOrder = order;
-    if (changed) {
+    this.lastKnobCount = knobCount;
+    if (orderChanged || knobChanged) {
       const capabilities = this.getCapabilities();
       for (const handler of this.capabilityHandlers) handler(capabilities);
     }

@@ -75,6 +75,11 @@ export class OpenDeckPluginTransport {
     const event = parseInboundEvent(frame);
     if (!event) return;
     switch (event.event) {
+      case 'info':
+        for (const d of event.devices) {
+          this.deviceConnect.forEach((h) => h({ device: d.id, info: d.info }));
+        }
+        break;
       case 'deviceDidConnect':
         this.deviceConnect.forEach((h) => h({ device: event.device, info: event.deviceInfo }));
         break;

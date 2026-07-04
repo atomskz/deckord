@@ -5,6 +5,7 @@
   "URL": "https://atomskz.github.io/deckord",
   "Description": "Show the participants of your Discord voice channel on the deck.",
   "Category": "Deckord",
+  "CategoryIcon": "icons/plugin",
   "Icon": "icons/plugin",
   "CodePath": "relay.mjs",
   "SDKVersion": 2,

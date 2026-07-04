@@ -65,8 +65,11 @@ export class SlotManager {
 
     const slots: DeckSlot[] = new Array<DeckSlot>(this.slotCount);
 
-    // Status / page slot.
-    slots[this.config.statusSlotIndex] = this.buildStatusSlot(pageCount);
+    // Status / page slot — only if a valid index is reserved for it (an
+    // out-of-range statusSlotIndex means "no status slot", e.g. a 1-key deck).
+    if (this.config.statusSlotIndex >= 0 && this.config.statusSlotIndex < this.slotCount) {
+      slots[this.config.statusSlotIndex] = this.buildStatusSlot(pageCount);
+    }
 
     // User + empty slots.
     this.userSlotIndices.forEach((slotIndex, position) => {

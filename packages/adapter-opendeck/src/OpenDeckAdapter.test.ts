@@ -56,9 +56,10 @@ describe('OpenDeckAdapter', () => {
     expect(c.slotCount).toBe(2);
     expect(c.knobCount).toBe(1);
     expect(c.imageFormats).toEqual(['png']);
-    // fired once per keypad change (b, then a); the encoder does not change the order
-    expect(caps.length).toBe(2);
+    // fires for each keypad change (b, then a) AND for the encoder (knobCount 0->1)
+    expect(caps.length).toBe(3);
     expect(caps.at(-1)?.slotCount).toBe(2);
+    expect(caps.at(-1)?.knobCount).toBe(1);
   });
 
   it('setSlot renders a PNG and sends setImage to the ordered context', async () => {

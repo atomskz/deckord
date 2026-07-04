@@ -23,11 +23,19 @@ describe('slotConfigFromCapabilities', () => {
     });
   });
 
-  it('clamps degenerate values to a sane minimum', () => {
+  it('does not reserve a status slot on a 1-key deck (would leave 0 user slots)', () => {
+    expect(slotConfigFromCapabilities(caps({ rows: 1, columns: 1, slotCount: 1 }))).toEqual({
+      rows: 1,
+      columns: 1,
+      statusSlotIndex: -1,
+    });
+  });
+
+  it('clamps degenerate values to a sane minimum (no status slot)', () => {
     expect(slotConfigFromCapabilities(caps({ rows: 0, columns: 0, slotCount: 0 }))).toEqual({
       rows: 1,
       columns: 1,
-      statusSlotIndex: 0,
+      statusSlotIndex: -1,
     });
   });
 });

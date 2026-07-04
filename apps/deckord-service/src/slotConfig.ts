@@ -10,10 +10,14 @@ import type { SlotManagerConfig } from '@deckord/deck-core';
 export function slotConfigFromCapabilities(caps: DeckCapabilities): SlotManagerConfig {
   const columns = Math.max(1, caps.columns);
   const rows = Math.max(1, caps.rows);
-  const slotCount = Math.max(1, caps.slotCount);
+  // Derive from rows*columns (what SlotManager itself uses for slotCount) rather than
+  // caps.slotCount, to avoid an implicit invariant coupling. Reserve the last slot for
+  // status/page — but not on a 1-slot deck (that would leave zero user slots), where
+  // an out-of-range index tells SlotManager to skip the status slot.
+  const total = rows * columns;
   return {
     rows,
     columns,
-    statusSlotIndex: slotCount - 1,
+    statusSlotIndex: total >= 2 ? total - 1 : -1,
   };
 }

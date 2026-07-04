@@ -42,6 +42,8 @@ export class DeckordService {
   private readonly openDeckLink: OpenDeckWsLink | undefined;
 
   private renderedLayout: DeckLayout | null = null;
+  private reconfigureTimer: ReturnType<typeof setTimeout> | undefined;
+  private pendingCaps: DeckCapabilities | undefined;
 
   /** Avatar bytes for a physical-deck rasterizer (OpenDeck): the cached local file. */
   private readonly resolveDeckAvatar = async (slot: RenderedDeckSlot): Promise<string | undefined> => {
@@ -111,14 +113,23 @@ export class DeckordService {
     );
 
     // Wire handlers before accepting connections / starting the provider.
-    host.onButtonDown((event) => this.handleButton(event)); // debug only, no Discord writes
+    // Shared button path for whatever adapter is active (paging/selection); no Discord writes yet.
+    host.onButtonDown((event) => this.handleButton(event));
     this.ws.onClientConnect((client) => this.sendSnapshot(client));
     this.ws.onMockCommand((command, userId) => this.handleMockCommand(command, userId));
     this.voice.onUpdate((state) => this.refreshDeck(state));
     this.voice.onStatus((status) => this.broadcastStatus(status));
 
     await host.start();
-    await this.openDeckLink?.start(); // after the adapter is created, so frames aren't missed
+    if (this.openDeckLink) {
+      // After the adapter is created (so frames aren't missed). The endpoint is
+      // opt-in and non-critical: a bind failure must not take down the service.
+      try {
+        await this.openDeckLink.start();
+      } catch (error) {
+        this.log.warn(`OpenDeck relay endpoint failed to start (continuing): ${String(error)}`);
+      }
+    }
     await this.ws.start();
     await this.voice.start();
     this.refreshDeck(this.voice.getState());
@@ -126,6 +137,7 @@ export class DeckordService {
   }
 
   async stop(): Promise<void> {
+    if (this.reconfigureTimer) clearTimeout(this.reconfigureTimer);
     await this.voice.stop();
     await this.host?.stop();
     await this.openDeckLink?.stop();
@@ -133,8 +145,23 @@ export class DeckordService {
     this.log.info('Deckord service stopped');
   }
 
-  /** Rebuild deck-core when the deck's capabilities change (hot-plug / re-assignment). */
+  /**
+   * Rebuild deck-core when the deck's capabilities change (hot-plug / re-assignment).
+   * Debounced so a burst of willAppear/willDisappear while the user assigns keys
+   * coalesces into a single rebuild + repaint instead of one per event.
+   */
   private reconfigure(caps: DeckCapabilities): void {
+    this.pendingCaps = caps;
+    if (this.reconfigureTimer) return;
+    this.reconfigureTimer = setTimeout(() => {
+      this.reconfigureTimer = undefined;
+      const pending = this.pendingCaps;
+      this.pendingCaps = undefined;
+      if (pending) this.applyReconfigure(pending);
+    }, 60);
+  }
+
+  private applyReconfigure(caps: DeckCapabilities): void {
     this.log.info(`Deck capabilities changed: ${caps.slotCount} slots (${caps.rows}×${caps.columns})`);
     this.slots = new SlotManager(slotConfigFromCapabilities(caps));
     this.renderedLayout = null;

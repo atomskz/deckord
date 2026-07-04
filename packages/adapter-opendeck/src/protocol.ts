@@ -24,6 +24,7 @@ export type ElgatoAppearance = {
 
 /** Inbound events (host → plugin), the subset we handle. */
 export type ElgatoInboundEvent =
+  | { event: 'info'; devices: Array<{ id: string; info: ElgatoDeviceInfo }> }
   | { event: 'deviceDidConnect'; device: string; deviceInfo: ElgatoDeviceInfo }
   | { event: 'deviceDidDisconnect'; device: string }
   | { event: 'willAppear'; context: string; device: string; coordinates?: ElgatoCoordinates; controller: ElgatoController }
@@ -33,6 +34,19 @@ export type ElgatoInboundEvent =
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function parseDeviceInfo(raw: unknown): ElgatoDeviceInfo {
+  const info = asRecord(raw) ?? {};
+  const size = asRecord(info.size);
+  return {
+    name: typeof info.name === 'string' ? info.name : undefined,
+    type: typeof info.type === 'number' ? info.type : undefined,
+    size:
+      size && typeof size.columns === 'number' && typeof size.rows === 'number'
+        ? { columns: size.columns, rows: size.rows }
+        : undefined,
+  };
 }
 
 function coords(payload: unknown): ElgatoCoordinates | undefined {
@@ -50,19 +64,21 @@ export function parseInboundEvent(raw: unknown): ElgatoInboundEvent | null {
   const device = typeof f.device === 'string' ? f.device : '';
 
   switch (f.event) {
-    case 'deviceDidConnect': {
-      const info = asRecord(f.deviceInfo) ?? {};
-      const size = asRecord(info.size);
-      const deviceInfo: ElgatoDeviceInfo = {
-        name: typeof info.name === 'string' ? info.name : undefined,
-        type: typeof info.type === 'number' ? info.type : undefined,
-        size:
-          size && typeof size.columns === 'number' && typeof size.rows === 'number'
-            ? { columns: size.columns, rows: size.rows }
-            : undefined,
-      };
-      return device ? { event: 'deviceDidConnect', device, deviceInfo } : null;
+    case 'info': {
+      // Synthetic frame the relay builds from the `-info` launch payload.
+      const payload = asRecord(f.payload) ?? f;
+      const list = Array.isArray(payload.devices) ? payload.devices : [];
+      const devices = list
+        .map((d) => {
+          const dr = asRecord(d);
+          const id = dr && typeof dr.id === 'string' ? dr.id : '';
+          return { id, info: parseDeviceInfo(dr) };
+        })
+        .filter((d) => d.id !== '');
+      return { event: 'info', devices };
     }
+    case 'deviceDidConnect':
+      return device ? { event: 'deviceDidConnect', device, deviceInfo: parseDeviceInfo(f.deviceInfo) } : null;
     case 'deviceDidDisconnect':
       return device ? { event: 'deviceDidDisconnect', device } : null;
     case 'willAppear':
