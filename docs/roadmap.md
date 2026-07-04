@@ -44,9 +44,13 @@ Discord/mock → VoiceService → deck-core → renderer → deck-adapter → de
   `DeckAdapterHost`, a `DeckAdapterRegistry` that selects an adapter at runtime, and
   the `DebugBrowserDeckAdapter`/`Factory` all exist. Runtime hot-plug monitoring is
   deferred to the physical adapters that need it.
-- **Phases 7–9 are future work** — physical-device adapters (OpenDeck, StreamDock /
-  AJAZZ) and productization (installer, tray, auto-start, config UI, privacy policy,
-  diagnostics, and Discord app approval).
+- **Phase 7 (OpenDeck adapter) — code complete, pending live verification.** The
+  `@deckord/adapter-opendeck` package, the Variant-B relay endpoint + plugin, and
+  dynamic capability-driven layout all work against a simulated relay; verifying on a
+  real OpenDeck host + device is what remains.
+- **Phases 8–9 are future work** — the StreamDock / AJAZZ AKP05 PRO adapter and
+  productization (installer, tray, auto-start, config UI, privacy policy, diagnostics,
+  and Discord app approval).
 
 ### Near-term plan — finish Phases 4–5, then test on a real Discord client
 
@@ -350,17 +354,25 @@ Device layout/capabilities arrive as Elgato events (`-info` / `deviceDidConnect`
 `willAppear`) → aggregated into `DeckCapabilities`; needs `onCapabilitiesChanged` +
 configuring `SlotManager` from capabilities (dynamic / hot-plug).
 
-Deliverables (all **TODO**):
+Deliverables — **code complete, pending verification on a real OpenDeck + device**:
 
-- **TODO** — `OpenDeckAdapter` implementing `IDeckAdapter`, translating slot writes
-  into device SDK/protocol calls and device presses into `DeckButtonEvent`s.
-- **TODO** — device discovery / connect / reconnect lifecycle in `start()`/`stop()`.
-- **TODO** — accurate `getLayoutSpec()` (grid size, icon size, knobs) reported from
-  the connected device.
-- **TODO** — consume Phase 5 rasterized images (`imageDataUrl`) for button faces.
-- **TODO** — register the adapter with the Phase 6 selection mechanism and expose it
-  from [`@deckord/deck-adapter`](../packages/deck-adapter/src/index.ts).
-- **TODO** — hardware integration tests / manual verification playbook.
+- **DONE** — dynamic capabilities: `IDeckAdapter.onCapabilitiesChanged` + the service
+  configures/rebuilds `SlotManager` from `getCapabilities()` (`slotConfigFromCapabilities`).
+- **DONE** — `@deckord/adapter-opendeck`: the Elgato protocol
+  (`protocol.ts`, `OpenDeckPluginTransport`), and `OpenDeckAdapter` implementing
+  `IDeckAdapter` — learns layout from `deviceDidConnect`/`willAppear`, maps slot→context
+  by (row,column), reports `DeckCapabilities`, rasterizes via `@deckord/image-renderer`
+  and sends `setImage`, and maps key presses to `DeckButtonEvent`s.
+- **DONE** — `OpenDeckFactory` registered in the service (Variant B) with an
+  `OpenDeckWsLink` loopback relay endpoint + avatar resolver; opted in with
+  `DECKORD_DECK_ADAPTER=opendeck` / `DECKORD_OPENDECK=1`.
+- **DONE** — the `io.github.atomskz.deckord.sdPlugin` (manifest + `relay.mjs` dumb pipe
+  + placeholder icons).
+- **DONE** — verified end-to-end with a simulated relay: `willAppear` → capability
+  reconfiguration (1→2→3 slots) → `setImage` PNG frames per context.
+- **TODO (7.x)** — verify on a real OpenDeck host + a Stream Deck-compatible device;
+  package `relay.mjs` for host launch (Node runtime / executable); real icons;
+  Property Inspector; clear stale `willAppear` state on relay reconnect.
 
 ---
 
