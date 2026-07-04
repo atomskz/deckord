@@ -1,0 +1,36 @@
+{
+  "Name": "Deckord",
+  "Version": "0.1.0",
+  "Author": "atomskz",
+  "URL": "https://atomskz.github.io/deckord",
+  "Description": "Show the participants of your Discord voice channel on the deck.",
+  "Category": "Deckord",
+  "Icon": "icons/plugin",
+  "CodePath": "relay.mjs",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.0"
+  },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "11" }
+  ],
+  "Actions": [
+    {
+      "UUID": "io.github.atomskz.deckord.slot",
+      "Name": "Voice Slot",
+      "Icon": "icons/slot",
+      "Tooltip": "A Discord voice-channel participant (managed by the Deckord service).",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "icons/slot" }]
+    },
+    {
+      "UUID": "io.github.atomskz.deckord.status",
+      "Name": "Status / Page",
+      "Icon": "icons/status",
+      "Tooltip": "Channel status / page control.",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "icons/status" }]
+    }
+  ]
+}
