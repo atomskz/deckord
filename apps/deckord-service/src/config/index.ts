@@ -20,6 +20,8 @@ export type DeckordConfig = {
   discord: DiscordRpcConfig;
   /** Where the Discord OAuth token is persisted (Phase 9 → OS-secured store). */
   discordTokenPath: string;
+  /** Directory where downloaded avatars are cached. */
+  avatarCacheDir: string;
   mock: {
     autoStart: boolean;
     initialUsers: number;
@@ -67,6 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DeckordConfig 
       redirectUri: env.DISCORD_REDIRECT_URI,
     },
     discordTokenPath: env.DECKORD_TOKEN_PATH ?? path.join(dataDir, 'discord-token.json'),
+    avatarCacheDir: env.DECKORD_AVATAR_DIR ?? path.join(dataDir, 'avatars'),
     mock: {
       autoStart: bool(env.DECKORD_MOCK_AUTOSTART, true),
       initialUsers: num(env.DECKORD_MOCK_USERS, 5),

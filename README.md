@@ -10,12 +10,13 @@ AJAZZ, …). Deckord is built so the device is the only replaceable part: everyt
 above it — reading Discord voice state, assigning people to slots, paginating,
 rendering labels and badges — is device-agnostic.
 
-> Status: **MVP.** The end-to-end pipeline runs today against a built-in **mock**
-> voice channel and the **browser debug deck**. The Discord RPC path — transport,
-> the full interactive OAuth `AUTHORIZE` → token-exchange → refresh flow, and voice
-> subscriptions — is **implemented and pending live verification** against a real
-> Discord client. Physical-device adapters, PNG rendering, and avatar downloading are
-> not implemented yet. See [MVP status](#mvp-status--not-yet-implemented).
+> Status: **MVP+.** The end-to-end pipeline runs against the built-in **mock** voice
+> channel and against a **real Discord client** — RPC transport, interactive OAuth
+> (`AUTHORIZE` → token-exchange → refresh), and voice subscriptions, all verified live
+> — rendered on the **browser debug deck**. Avatar caching and server-side PNG
+> rendering (for future physical decks) are done. The **physical-device adapters**
+> themselves are the main thing not implemented yet.
+> See [MVP status](#mvp-status--not-yet-implemented).
 
 ---
 
@@ -101,7 +102,8 @@ changes.
 | `@deckord/ipc-contract` | [packages/ipc-contract](packages/ipc-contract) | The local WebSocket wire protocol: Zod schemas + `encode` / `decode*` for every message that crosses the service ↔ UI boundary. Also holds the default host/port/path constants. |
 | `@deckord/discord-rpc` | [packages/discord-rpc](packages/discord-rpc) | Discord IPC transport, RPC handshake/request/dispatch, voice-state normalization, the interactive OAuth `AUTHORIZE` → token-exchange → refresh flow ([`DiscordAuthenticator`](packages/discord-rpc/src/DiscordAuthenticator.ts)), and a token store. Pending live verification against a real client. |
 | `@deckord/deck-core` | [packages/deck-core](packages/deck-core) | Pure logic: turn a `VoiceChannelState` into a logical `DeckLayout` with stable slot ordering ([`AssignmentPolicy`](packages/deck-core/src/AssignmentPolicy.ts)), pagination ([`PageManager`](packages/deck-core/src/PageManager.ts)), and a reserved status/page slot ([`SlotManager`](packages/deck-core/src/SlotManager.ts)). No I/O, no timers. |
-| `@deckord/renderer` | [packages/renderer](packages/renderer) | Enrich a logical layout with presentational fields: titles, subtitles, avatar source, status badges, accessibility labels. |
+| `@deckord/renderer` | [packages/renderer](packages/renderer) | Enrich a logical layout with presentational fields: titles, subtitles, avatar source, status badges, accessibility labels, and a deterministic identicon. Browser-safe (no native deps). |
+| `@deckord/image-renderer` | [packages/image-renderer](packages/image-renderer) | Node-only PNG rasterizer (`SlotImageRenderer`, backed by `@napi-rs/canvas`) that turns a rendered slot into button pixels for **physical** decks. The browser deck renders via CSS instead. |
 | `@deckord/deck-adapter` | [packages/deck-adapter](packages/deck-adapter) | The replaceable device layer: the [`IDeckAdapter`](packages/deck-adapter/src/IDeckAdapter.ts) contract, a change-diffing [`DeckAdapterHost`](packages/deck-adapter/src/DeckAdapterHost.ts), and the MVP [`DebugBrowserDeckAdapter`](packages/deck-adapter/src/DebugBrowserDeckAdapter.ts). |
 | `deckord-service` | [apps/deckord-service](apps/deckord-service) | The Node orchestrator: config, logging, voice providers + fallback, avatar resolver, WebSocket server, and the pipeline wiring in [`DeckordService`](apps/deckord-service/src/DeckordService.ts). |
 | `deckord-debug-deck` | [apps/deckord-debug-deck](apps/deckord-debug-deck) | The Vite + React browser deck: renders the button grid, sends virtual presses, and exposes mock controls. |
@@ -110,25 +112,12 @@ changes.
 
 ## MVP status — not yet implemented
 
-The pipeline is complete end-to-end **in mock mode**, rendered on the **browser debug
-deck**. The following are deliberately stubbed or absent in the MVP:
+The pipeline is complete end-to-end in both mock mode and against a real Discord
+client, rendered on the **browser debug deck**. The following are still absent:
 
 - **Physical deck adapters.** Only [`DebugBrowserDeckAdapter`](packages/deck-adapter/src/DebugBrowserDeckAdapter.ts)
   exists. Elgato / OpenDeck / StreamDock adapters are future work behind the same
   [`IDeckAdapter`](packages/deck-adapter/src/IDeckAdapter.ts) interface.
-- **Live Discord verification.** The interactive OAuth `AUTHORIZE` → token-exchange →
-  refresh flow ([`DiscordAuthenticator`](packages/discord-rpc/src/DiscordAuthenticator.ts))
-  is implemented, but has **not yet been verified against a running Discord client**
-  with a registered app (roadmap task 4.8). Until then it is code-complete but
-  unproven; the mock provider remains the default and the fallback.
-- **Server-side PNG rendering.** `toRenderedSlot` in
-  [`renderSlot.ts`](packages/renderer/src/renderSlot.ts) leaves `imageDataUrl`
-  undefined. Physical decks that need rasterized button images (sharp/canvas) are
-  future work. The CSS debug deck uses the `image` URL directly.
-- **Avatar download + on-disk caching.** [`AvatarCache`](apps/deckord-service/src/avatars/AvatarCache.ts)
-  only passes through whatever URL/local path the provider already supplied
-  (`prefetch` is a no-op). The UI draws an initials placeholder when there is no
-  avatar. Downloading/caching is future work behind the same resolver.
 - **Discord writes.** The RPC scopes are read-only; button presses drive debug-only
   behavior (page switching, local selection) and never mute/move anyone in Discord.
 

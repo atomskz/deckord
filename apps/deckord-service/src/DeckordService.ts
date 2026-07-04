@@ -36,7 +36,7 @@ export class DeckordService {
     private readonly config: DeckordConfig,
     private readonly log: Logger,
   ) {
-    this.avatars = new AvatarCache(log.child('avatars'));
+    this.avatars = new AvatarCache({ dir: config.avatarCacheDir }, log.child('avatars'));
     this.slots = new SlotManager(DEFAULT_SLOT_CONFIG);
     this.ws = new WsServer(config.ws, log.child('ws'));
 
@@ -84,6 +84,13 @@ export class DeckordService {
   // --- pipeline ------------------------------------------------------------
 
   private refreshDeck(state: VoiceChannelState): void {
+    // Warm the avatar cache in the background (de-duplicated); useful for a future
+    // physical deck. The browser still loads avatar URLs directly. Guard the
+    // fire-and-forget so a future throw can't become an unhandled rejection.
+    for (const user of state.users) {
+      void this.avatars.prefetch(user).catch((error) => this.log.warn(`avatar prefetch failed: ${String(error)}`));
+    }
+
     const logical = this.slots.computeLayout(state);
     this.pushLayout(logical, state);
     this.ws.broadcast({ type: 'voice_update', payload: state });

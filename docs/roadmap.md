@@ -24,17 +24,21 @@ Discord/mock → VoiceService → deck-core → renderer → deck-adapter → de
   model and IPC wire contract, the mock voice provider, and the browser Debug Deck
   MVP all exist and are wired together in
   [`DeckordService`](../apps/deckord-service/src/DeckordService.ts).
-- **Phase 4 (Discord RPC) — code complete, pending live verification.** The IPC
+- **Phase 4 (Discord RPC) — DONE, verified against a live client.** The IPC
   transport, RPC handshake/request/dispatch, voice-state normalization, the full
   interactive `AUTHORIZE` → token-exchange → refresh → `FileTokenStore` auth flow, the
   global `VOICE_CHANNEL_SELECT` + per-channel subscriptions, unsubscribe-on-switch,
-  reconnect/backoff, and graceful fallback to mock are all implemented and green
-  (typecheck/tests/lint). The remaining step is **4.8**: verifying the protocol against
-  a running Discord desktop client with a registered app. A pre-obtained
-  `DISCORD_ACCESS_TOKEN` fast path is kept for testing without the OAuth round-trip.
-- **Phase 5 (renderer abstraction) is partially scaffolded.** Titles, subtitles,
-  badges, accessibility labels, and avatar-source resolution exist; server-side PNG
-  rasterization (`imageDataUrl`) and real avatar download/caching are stubbed.
+  reconnect/backoff, and graceful fallback to mock all work against a real Discord
+  desktop client — participants, speaking highlight, mute/deafen badges, and channel
+  switching confirmed. Live verification (4.8) fixed one protocol detail: the mute/deaf
+  flags are nested under `voice_state` (not top-level). Only optional **4.9**
+  (speaking-event throttle) remains. A pre-obtained `DISCORD_ACCESS_TOKEN` fast path is
+  kept for testing without the OAuth round-trip.
+- **Phase 5 (renderer abstraction) — DONE.** Presentational enrichment (titles,
+  subtitles, badges, accessibility labels), a deterministic identicon, real avatar
+  download + on-disk caching (`AvatarCache`), and server-side PNG rasterization (the
+  new `@deckord/image-renderer` package via `@napi-rs/canvas`) all exist. The browser
+  deck still renders via CSS; the PNG path is for physical decks (Phase 7+).
 - **Phase 6 (adapter system) is partially scaffolded.** The `IDeckAdapter` contract,
   the change-diffing `DeckAdapterHost`, and one concrete adapter
   (`DebugBrowserDeckAdapter`) exist; a registry/selection mechanism for multiple
@@ -209,8 +213,8 @@ Deliverables:
   `FileTokenStore` (plaintext `0600` JSON — MVP), `MemoryTokenStore`) in
   [`DiscordAuth.ts`](../packages/discord-rpc/src/DiscordAuth.ts).
 
-Auth + subscription work — **implemented, pending live verification** (4.1–4.7 DONE;
-4.8 needs a running Discord client + a registered app):
+Auth + subscription work — **DONE and verified against a live Discord client**
+(4.1–4.8 DONE; only optional 4.9 remains):
 
 - **DONE (4.1)** — `authorize()` on `DiscordRpcClient`: sends `AUTHORIZE`
   (`{client_id, scopes, prompt}`) with a long timeout and returns the OAuth `code`
@@ -234,10 +238,11 @@ Auth + subscription work — **implemented, pending live verification** (4.1–4
 - **PARTIAL — the seam for a pre-obtained token** (`DISCORD_ACCESS_TOKEN`) is kept as a
   documented fast path in `DiscordAuthenticator`, so testing without the full OAuth
   round-trip stays possible.
-- **TODO (4.8)** — live protocol-verification pass under `DECKORD_LOG_LEVEL=debug`:
-  confirm the READY / `AUTHENTICATE` payloads, the `voice_states` shape, and
-  `SPEAKING_*` (`{channel_id, user_id}`) against a running client; fix field
-  mismatches.
+- **DONE (4.8)** — live protocol-verification pass against a running Discord client:
+  participants, speaking highlight, mute/deafen badges, and channel switching all
+  confirmed working. Fixed the one mismatch found — the mute/deaf flags are nested
+  under `voice_state`, so `normalizeVoiceState` now reads them there (with a top-level
+  legacy fallback) and defaults every flag to a boolean.
 - **TODO (4.9, optional)** — throttle/coalesce high-frequency `SPEAKING_*` events.
 - **TODO** — OS-secured token storage (deferred to Phase 9).
 
@@ -272,23 +277,27 @@ Deliverables:
   injectable ([`renderer/src/types.ts`](../packages/renderer/src/types.ts)).
 - **DONE** — `toRenderedSlot`: maps an enriched `DeckSlot` to the adapter-facing
   `RenderedDeckSlot` (CSS decks use `image`).
-Remaining (in execution order):
+Phase 5 is **DONE**:
 
-- **TODO (5.1)** — avatar download + on-disk cache:
+- **DONE (5.1)** — avatar download + on-disk cache:
   [`AvatarCache`](../apps/deckord-service/src/avatars/AvatarCache.ts) `prefetch`
-  fetches the Discord CDN avatar, stores it under a local cache dir, and `resolve`
-  returns the cached path/data-URL; emit `AVATAR_DOWNLOAD_FAILED` on failure (falls
-  back to the initials placeholder). **This is the Phase 5 item that improves the
-  real-client test** (real faces instead of initials).
-- **TODO (5.2)** — deterministic initials/identicon data-URL generator for users with
-  no avatar, so future physical decks have a face too (the CSS deck already draws
-  initials in the browser).
-- **TODO (5.3)** — server-side PNG rasterization behind a `SlotImageRenderer` seam:
-  compose avatar + title + badges + speaking state into a button PNG, filling
-  `RenderedDeckSlot.imageDataUrl`. Pick a rasterizer with Windows prebuilds
-  (`@napi-rs/canvas`, or `sharp` + SVG). **Only physical decks (Phase 7+) consume this
-  — it is NOT required for the browser-based real-client test**, which renders via CSS.
-- **TODO (5.4)** — theme variants + per-state PNG styling to match the CSS deck.
+  downloads the Discord CDN avatar, caches it under `DECKORD_AVATAR_DIR`
+  (`~/.deckord/avatars` by default), de-dupes by user + avatar hash, and never
+  retries after a failure (logs `AVATAR_DOWNLOAD_FAILED`). `localPath` exposes the
+  cached file to the image-renderer; `resolve` still returns the URL for the browser.
+  The orchestrator warms the cache on every voice update.
+- **DONE (5.2)** — deterministic identicon in
+  [`identicon.ts`](../packages/renderer/src/identicon.ts): `identiconDataUrl` (SVG data
+  URL, browser-safe) plus shared `initialsOf` / `colorForSeed` reused by the canvas
+  renderer.
+- **DONE (5.3)** — server-side PNG rasterization in the new
+  [`@deckord/image-renderer`](../packages/image-renderer) package (`SlotImageRenderer`,
+  backed by `@napi-rs/canvas` — prebuilt binaries for Windows + Linux + macOS). It
+  composes avatar/identicon + title + subtitle + badges into a PNG buffer / data URL.
+  **Only physical decks (Phase 7+) consume this** — the browser deck renders via CSS.
+- **DONE (5.4)** — per-state styling in the canvas renderer, driven by the shared
+  `@deckord/renderer` theme: speaking green border, selected border, mute/deafen dim +
+  colored badges, distinct empty / status-slot rendering.
 
 ---
 

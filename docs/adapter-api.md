@@ -258,11 +258,25 @@ serves both families of deck:
   key. Devices that also have a text/title API (Elgato, some StreamDock modes)
   can additionally use `title`/`subtitle`.
 
-Right now `toRenderedSlot` always sets `imageDataUrl: undefined`. Server-side
-PNG generation (sharp/canvas) is a future phase; when it lands, a physical
-adapter reads `imageDataUrl`, and the debug adapter keeps reading `image`.
-Design your adapter to prefer `imageDataUrl` when present and fall back to
-`image`/`title` only if the device supports them.
+`toRenderedSlot` itself leaves `imageDataUrl: undefined` — the debug (CSS) deck
+never needs it. A **physical** adapter fills it by calling the server-side PNG
+renderer, [`@deckord/image-renderer`](../packages/image-renderer):
+
+```ts
+import { SlotImageRenderer } from '@deckord/image-renderer';
+
+const images = new SlotImageRenderer({ size: 96 }); // match your device's key size
+// avatars: AvatarCache.localPath(user) gives the cached PNG file for the slot's user
+const avatar = slot.userId ? await avatarCache.localPath(userById.get(slot.userId)) : undefined;
+const buffer = await images.renderToBuffer(slot, avatar); // PNG bytes to upload to the key
+```
+
+`SlotImageRenderer` composes avatar (or a deterministic identicon), title,
+subtitle, badges, and per-state styling (speaking border, mute/deafen dim) into a
+PNG, driven by the shared `@deckord/renderer` theme. It is backed by
+`@napi-rs/canvas` (prebuilt binaries for Windows/Linux/macOS) and is **node-only**
+— keep it out of any browser bundle. Design your adapter to prefer the rendered
+PNG and fall back to `image`/`title` only for devices with their own text API.
 
 The supporting shapes an adapter may care about:
 
