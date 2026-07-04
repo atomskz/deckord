@@ -107,6 +107,28 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/adapter-opendeck:
+    dependencies:
+      '@deckord/deck-adapter':
+        specifier: workspace:*
+        version: link:../deck-adapter
+      '@deckord/image-renderer':
+        specifier: workspace:*
+        version: link:../image-renderer
+      '@deckord/renderer':
+        specifier: workspace:*
+        version: link:../renderer
+      '@deckord/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/deck-adapter:
     dependencies:
       '@deckord/ipc-contract':
