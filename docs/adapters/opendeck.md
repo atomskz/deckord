@@ -51,15 +51,24 @@ OpenDeck are both "output clients" of the one service.
 
 ## What "the plugin" physically is
 
-A folder installed into OpenDeck's plugins dir:
+A folder installed into OpenDeck's plugins dir. **Naming convention (Elgato):** the
+folder name equals the plugin UUID in reverse-DNS form `io.github.<user>.<project>`,
+and the folder ends in `.sdPlugin`. We have no domain, so we use the GitHub-Pages
+namespace `atomskz.github.io` → **UUID / folder = `io.github.atomskz.deckord`**
+(`io.github.<user>` is preferred over `com.github.<user>` because `atomskz.github.io`
+is a real subdomain allocated to the user, whereas `github.com/atomskz` is only a path).
 
 ```
-deckord.sdPlugin/
-  manifest.json     # Name, UUID, CodePath (the bridge entry), Actions, icons
+io.github.atomskz.deckord.sdPlugin/
+  manifest.json     # Name, UUID = io.github.atomskz.deckord, CodePath (bridge entry), Actions, icons
   <bridge entry>    # e.g. a Node script; the CodePath OpenDeck launches
   pi/…              # Property Inspector HTML
   icons/…
 ```
+
+Action UUIDs extend the plugin UUID: `io.github.atomskz.deckord.slot` (a participant
+slot) and `io.github.atomskz.deckord.status` (status / page). This UUID is baked into
+users' key assignments — pick it once; changing it later breaks existing setups.
 
 Lifecycle: OpenDeck reads the manifest, **spawns CodePath** as a child process with
 `-port <hostWsPort> -pluginUUID <uuid> -registerEvent register -info <base64>`. The
@@ -132,8 +141,9 @@ keys the user placed the action on, **not** the whole device.
 
 ## GUI model (what the user sees in OpenDeck)
 
-- **Actions sidebar**: a **"Deckord"** category with actions — `Voice Slot` (a
-  participant slot) and `Status / Page`.
+- **Actions sidebar**: a **"Deckord"** category with actions — `Voice Slot`
+  (`io.github.atomskz.deckord.slot`, a participant slot) and `Status / Page`
+  (`io.github.atomskz.deckord.status`).
 - The user **drags actions onto keys** → each fires `willAppear`. The Deckord layout is
   wherever the user placed them; unplaced keys are free for other plugins.
 - **Keys** show the live rasterized PNG (avatar/identicon + name + speaking glow +
