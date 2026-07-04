@@ -1,0 +1,10 @@
+{
+  "//": "Typechecks test files with index-access strictness relaxed (idiomatic in tests). Run with `pnpm test:types`.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUncheckedIndexedAccess": false
+  },
+  "exclude": ["**/node_modules/**", "**/dist/**"],
+  "include": ["packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts"]
+}

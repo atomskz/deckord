@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# vite
+apps/*/dist/
+.vite/
+
+# logs & runtime data
+logs/
+*.log
+.deckord/
+data/avatars/
+
+# local config / secrets
+.env
+.env.local
+*.local
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
