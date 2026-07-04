@@ -16,6 +16,7 @@ import {
 } from '@deckord/shared';
 import type { DeckordConfig } from './config/index';
 import { AvatarCache } from './avatars/AvatarCache';
+import { slotConfigFromCapabilities } from './slotConfig';
 import { WsServer, type WsClient } from './server/WsServer';
 import { VoiceService } from './voice/VoiceService';
 import type { ProviderStatus } from './voice/types';
@@ -31,7 +32,7 @@ import type { ProviderStatus } from './voice/types';
 export class DeckordService {
   private readonly voice: VoiceService;
   private readonly ws: WsServer;
-  private readonly slots: SlotManager;
+  private slots: SlotManager;
   private readonly adapters: DeckAdapterRegistry;
   private host: DeckAdapterHost | undefined;
   private readonly avatars: AvatarCache;
@@ -72,6 +73,11 @@ export class DeckordService {
     const host = new DeckAdapterHost(selection.adapter, toRenderedSlot);
     this.host = host;
 
+    // Configure deck-core from the selected deck's capabilities (grid follows the
+    // device), and react to runtime capability changes (hot-plug / re-assignment).
+    this.slots = new SlotManager(slotConfigFromCapabilities(selection.adapter.getCapabilities()));
+    selection.adapter.onCapabilitiesChanged((caps) => this.reconfigure(caps));
+
     // Initialize a rendered layout so the first client to connect always gets a
     // valid snapshot, even before the provider has emitted any state.
     const initialState = this.voice.getState();
@@ -99,6 +105,15 @@ export class DeckordService {
     await this.host?.stop();
     await this.ws.close();
     this.log.info('Deckord service stopped');
+  }
+
+  /** Rebuild deck-core when the deck's capabilities change (hot-plug / re-assignment). */
+  private reconfigure(caps: DeckCapabilities): void {
+    this.log.info(`Deck capabilities changed: ${caps.slotCount} slots (${caps.rows}×${caps.columns})`);
+    this.slots = new SlotManager(slotConfigFromCapabilities(caps));
+    this.renderedLayout = null;
+    void this.host?.reset().catch((error) => this.log.warn(`Deck reset failed: ${String(error)}`));
+    this.refreshDeck(this.voice.getState());
   }
 
   // --- pipeline ------------------------------------------------------------

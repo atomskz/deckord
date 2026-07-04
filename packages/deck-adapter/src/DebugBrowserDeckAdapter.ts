@@ -54,6 +54,10 @@ export class DebugBrowserDeckAdapter implements IDeckAdapter {
     return this.capabilities;
   }
 
+  onCapabilitiesChanged(_handler: (capabilities: DeckCapabilities) => void): void {
+    /* The debug browser deck has static capabilities — never changes. */
+  }
+
   async setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void> {
     this.wire.broadcast({
       type: 'slot_update',

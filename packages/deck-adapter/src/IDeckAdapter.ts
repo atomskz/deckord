@@ -23,6 +23,13 @@ export interface IDeckAdapter {
   /** Full capabilities — the grid spec plus how the device consumes visuals. */
   getCapabilities(): DeckCapabilities;
 
+  /**
+   * Register for capability changes at runtime (device hot-plug, or the user
+   * re-assigning keys on a host-driven deck like OpenDeck). Static decks (the
+   * debug browser deck) never fire it.
+   */
+  onCapabilitiesChanged(handler: (capabilities: DeckCapabilities) => void): void;
+
   setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void>;
   clearSlot(slotIndex: number): Promise<void>;
   clearAll(): Promise<void>;
