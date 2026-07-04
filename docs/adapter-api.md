@@ -59,8 +59,11 @@ export interface IDeckAdapter {
   start(): Promise<void>;
   stop(): Promise<void>;
 
-  /** Physical/virtual capabilities of this deck (grid size, icon size, knobs). */
+  /** Grid spec of this deck (rows, columns, slot count, icon size, knobs). */
   getLayoutSpec(): DeckLayoutSpec;
+
+  /** Full capabilities — the grid spec plus how the device consumes visuals. */
+  getCapabilities(): DeckCapabilities;
 
   setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void>;
   clearSlot(slotIndex: number): Promise<void>;
@@ -108,6 +111,45 @@ export type DeckLayoutSpec = {
 
 For a physical deck, `slotCount`, `rows`, `columns`, and (importantly)
 `iconSize` come from the hardware, not from `deck-core`'s defaults.
+
+### `getCapabilities(): DeckCapabilities`
+
+A superset of the grid spec (`packages/deck-adapter/src/types.ts`) describing how
+the device consumes visuals and what extra hardware it has:
+
+```ts
+export type DeckCapabilities = DeckLayoutSpec & {
+  imageFormats: DeckImageFormat[]; // 'css' (browser) or 'png' (physical LCD)
+  knobCount?: number;
+  supportsBrightness?: boolean;
+  hasTextApi?: boolean;            // device renders title/subtitle itself
+};
+```
+
+A physical LCD deck reports `imageFormats: ['png']`; the debug deck reports
+`['css']`. The selector and (later) the renderer use this to pick the right
+output for the connected device.
+
+### Registering and selecting your adapter
+
+Adapters are chosen at runtime through a factory + registry
+(`packages/deck-adapter/src/DeckAdapterRegistry.ts`), so nothing hardcodes a
+device:
+
+```ts
+export interface DeckAdapterFactory {
+  readonly id: string;
+  readonly name: string;
+  isSupported(): Promise<boolean>; // probe: is your hardware connected?
+  create(): Promise<IDeckAdapter>;
+}
+```
+
+Implement a factory whose `isSupported()` probes for your device, and register it
+in `DeckordService` alongside `DebugBrowserDeckFactory`. At start, the registry
+picks the preferred adapter (`DECKORD_DECK_ADAPTER`) if it is supported, otherwise
+the first supported factory — so the debug deck remains the fallback when no
+hardware is present. This is also the seam for multiple decks / hot-plug.
 
 ### `setSlot(slotIndex, slot: RenderedDeckSlot)`
 

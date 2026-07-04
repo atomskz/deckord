@@ -10,6 +10,8 @@ export type DeckordConfig = {
   appName: string;
   logLevel: LogLevel;
   provider: ProviderPreference;
+  /** Preferred deck adapter id (falls back to the first supported one). */
+  deckAdapter: string;
   ws: {
     host: string;
     port: number;
@@ -55,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DeckordConfig 
     appName: env.DECKORD_APP_NAME ?? 'Deckord',
     logLevel: logLevel(env.DECKORD_LOG_LEVEL),
     provider: preference,
+    deckAdapter: env.DECKORD_DECK_ADAPTER ?? 'debug-browser',
     ws: {
       host: env.DECKORD_WS_HOST ?? DEFAULT_WS_HOST,
       port: num(env.DECKORD_WS_PORT, DEFAULT_WS_PORT),

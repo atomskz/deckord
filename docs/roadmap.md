@@ -39,10 +39,11 @@ Discord/mock → VoiceService → deck-core → renderer → deck-adapter → de
   download + on-disk caching (`AvatarCache`), and server-side PNG rasterization (the
   new `@deckord/image-renderer` package via `@napi-rs/canvas`) all exist. The browser
   deck still renders via CSS; the PNG path is for physical decks (Phase 7+).
-- **Phase 6 (adapter system) is partially scaffolded.** The `IDeckAdapter` contract,
-  the change-diffing `DeckAdapterHost`, and one concrete adapter
-  (`DebugBrowserDeckAdapter`) exist; a registry/selection mechanism for multiple
-  adapters does not.
+- **Phase 6 (adapter system) — DONE.** The `IDeckAdapter` contract with capability
+  negotiation (`DeckCapabilities` / `getCapabilities`), the change-diffing
+  `DeckAdapterHost`, a `DeckAdapterRegistry` that selects an adapter at runtime, and
+  the `DebugBrowserDeckAdapter`/`Factory` all exist. Runtime hot-plug monitoring is
+  deferred to the physical adapters that need it.
 - **Phases 7–9 are future work** — physical-device adapters (OpenDeck, StreamDock /
   AJAZZ) and productization (installer, tray, auto-start, config UI, privacy policy,
   diagnostics, and Discord app approval).
@@ -322,10 +323,17 @@ Deliverables:
 - **DONE** — single-swap wiring: the concrete adapter is constructed in exactly one
   place ([`DeckordService`](../apps/deckord-service/src/DeckordService.ts)); nothing
   upstream changes when it is replaced.
-- **TODO** — adapter registry / capability-based selection (choose an adapter from
-  connected hardware, multiple decks, hot-plug).
-- **TODO** — per-adapter capability negotiation beyond `DeckLayoutSpec` (knob/LCD
-  support, brightness, image formats).
+- **DONE** — capability negotiation: `DeckCapabilities` (extends `DeckLayoutSpec`
+  with `imageFormats` `'css'`/`'png'`, `knobCount`, `supportsBrightness`,
+  `hasTextApi`) and `IDeckAdapter.getCapabilities()`.
+- **DONE** — adapter registry / selection: `DeckAdapterRegistry` +
+  `DeckAdapterFactory` pick an adapter at runtime — the preferred one
+  (`DECKORD_DECK_ADAPTER`) if supported, else the first supported factory; the
+  `DebugBrowserDeckFactory` is always available. `DeckordService` selects at start
+  instead of hardcoding. Foundation for multiple decks / hot-plug (a factory's
+  `isSupported()` probes for its hardware).
+- **TODO** — runtime hot-plug monitoring (re-select when a device connects/
+  disconnects) is left to the physical adapters that need it (Phase 7/8).
 
 ---
 

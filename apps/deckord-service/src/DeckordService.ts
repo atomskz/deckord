@@ -1,12 +1,19 @@
 import {
-  DebugBrowserDeckAdapter,
   DeckAdapterHost,
+  DeckAdapterRegistry,
+  DebugBrowserDeckFactory,
   type DeckCapabilities,
 } from '@deckord/deck-adapter';
 import { DEFAULT_SLOT_CONFIG, SlotManager } from '@deckord/deck-core';
 import { DEFAULT_THEME, renderLayout, toRenderedSlot, type RenderContext } from '@deckord/renderer';
 import type { MockCommand } from '@deckord/ipc-contract';
-import type { DeckButtonEvent, DeckLayout, Logger, VoiceChannelState } from '@deckord/shared';
+import {
+  DeckordError,
+  type DeckButtonEvent,
+  type DeckLayout,
+  type Logger,
+  type VoiceChannelState,
+} from '@deckord/shared';
 import type { DeckordConfig } from './config/index';
 import { AvatarCache } from './avatars/AvatarCache';
 import { WsServer, type WsClient } from './server/WsServer';
@@ -25,7 +32,8 @@ export class DeckordService {
   private readonly voice: VoiceService;
   private readonly ws: WsServer;
   private readonly slots: SlotManager;
-  private readonly host: DeckAdapterHost;
+  private readonly adapters: DeckAdapterRegistry;
+  private host: DeckAdapterHost | undefined;
   private readonly avatars: AvatarCache;
 
   private renderedLayout: DeckLayout | null = null;
@@ -45,13 +53,25 @@ export class DeckordService {
       imageFormats: ['css'],
       hasTextApi: true,
     };
-    const adapter = new DebugBrowserDeckAdapter(this.ws, capabilities);
-    this.host = new DeckAdapterHost(adapter, toRenderedSlot);
+    // Register the available deck adapters; the concrete one is chosen at start().
+    this.adapters = new DeckAdapterRegistry().register(
+      new DebugBrowserDeckFactory(this.ws, capabilities),
+    );
 
     this.voice = new VoiceService(config, log.child('voice'));
   }
 
   async start(): Promise<void> {
+    // Select the deck adapter: the debug browser deck by default; physical decks
+    // probe for their hardware. Falls back to the first supported factory.
+    const selection = await this.adapters.selectAndCreate(this.config.deckAdapter);
+    if (!selection) {
+      throw new DeckordError('CONFIG_INVALID', 'No supported deck adapter is available');
+    }
+    this.log.info(`Using deck adapter: ${selection.factory.name} (${selection.factory.id})`);
+    const host = new DeckAdapterHost(selection.adapter, toRenderedSlot);
+    this.host = host;
+
     // Initialize a rendered layout so the first client to connect always gets a
     // valid snapshot, even before the provider has emitted any state.
     const initialState = this.voice.getState();
@@ -61,13 +81,13 @@ export class DeckordService {
     );
 
     // Wire handlers before accepting connections / starting the provider.
-    this.host.onButtonDown((event) => this.handleButton(event)); // debug only, no Discord writes
+    host.onButtonDown((event) => this.handleButton(event)); // debug only, no Discord writes
     this.ws.onClientConnect((client) => this.sendSnapshot(client));
     this.ws.onMockCommand((command, userId) => this.handleMockCommand(command, userId));
     this.voice.onUpdate((state) => this.refreshDeck(state));
     this.voice.onStatus((status) => this.broadcastStatus(status));
 
-    await this.host.start();
+    await host.start();
     await this.ws.start();
     await this.voice.start();
     this.refreshDeck(this.voice.getState());
@@ -76,7 +96,7 @@ export class DeckordService {
 
   async stop(): Promise<void> {
     await this.voice.stop();
-    await this.host.stop();
+    await this.host?.stop();
     await this.ws.close();
     this.log.info('Deckord service stopped');
   }
@@ -101,7 +121,7 @@ export class DeckordService {
     const prev = this.renderedLayout;
     this.renderedLayout = rendered;
     void this.host
-      .apply(rendered)
+      ?.apply(rendered)
       .catch((error) => this.log.warn(`Deck apply failed: ${String(error)}`));
     // Per-slot content streams via slot_update; broadcast a full deck_update on
     // structural changes so the client's layout metadata (page/pageCount) stays correct.
