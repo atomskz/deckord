@@ -3,6 +3,7 @@ import {
   decodeClientMessage,
   encode,
   type ClientToServiceMessage,
+  type ConfigClientMessage,
   type MockCommand,
   type ServiceToClientMessage,
 } from '@deckord/ipc-contract';
@@ -24,6 +25,7 @@ export type WsServerConfig = {
 type ButtonHandler = (event: { kind: DeckButtonEventKind; slotIndex: number }) => void;
 type MockHandler = (command: MockCommand, userId?: string) => void;
 type ConnectHandler = (client: WsClient) => void;
+type ConfigHandler = (message: ConfigClientMessage, client: WsClient) => void;
 
 /**
  * Local WebSocket transport. Binds to loopback only, optionally gated by a shared
@@ -38,6 +40,7 @@ export class WsServer implements DeckWire {
   private readonly buttonHandlers: ButtonHandler[] = [];
   private readonly mockHandlers: MockHandler[] = [];
   private readonly connectHandlers: ConnectHandler[] = [];
+  private readonly configHandlers: ConfigHandler[] = [];
 
   constructor(
     private readonly config: WsServerConfig,
@@ -85,6 +88,11 @@ export class WsServer implements DeckWire {
 
   onClientConnect(handler: ConnectHandler): void {
     this.connectHandlers.push(handler);
+  }
+
+  /** Config-domain messages (get/set-config, connect_discord, restart_service). */
+  onConfigMessage(handler: ConfigHandler): void {
+    this.configHandlers.push(handler);
   }
 
   get clientCount(): number {
@@ -164,6 +172,14 @@ export class WsServer implements DeckWire {
       case 'mock_command':
         this.mockHandlers.forEach((h) => h(message.payload.command, message.payload.userId));
         break;
+      case 'get_config':
+      case 'set_config':
+      case 'connect_discord':
+      case 'restart_service': {
+        const client = this.makeClient(clientId);
+        if (client) this.configHandlers.forEach((h) => h(message, client));
+        break;
+      }
     }
   }
 

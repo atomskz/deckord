@@ -18,6 +18,9 @@ import {
   type VoiceChannelState,
 } from '@deckord/shared';
 import type { DeckordConfig } from './config/index';
+import { ConfigController } from './config/ConfigController';
+import type { SettingsStore } from './config/settings';
+import type { SecretStore } from './secrets/SecretStore';
 import { AvatarCache } from './avatars/AvatarCache';
 import { OpenDeckWsLink } from './opendeck/OpenDeckWsLink';
 import { slotConfigFromCapabilities } from './slotConfig';
@@ -29,6 +32,12 @@ import type { ProviderStatus } from './voice/types';
 export type DeckordServiceDeps = {
   /** OAuth token persistence. Defaults to a plaintext file inside the service. */
   tokenStore?: TokenStore;
+  /** Persisted user settings; enables the config-UI endpoints when provided. */
+  settingsStore?: SettingsStore;
+  /** Secret store; enables the config-UI endpoints when provided. */
+  secretStore?: SecretStore;
+  /** "Restart to apply": rebuild the service from the latest config. */
+  onRestart?: () => Promise<void>;
 };
 
 /**
@@ -47,6 +56,7 @@ export class DeckordService {
   private host: DeckAdapterHost | undefined;
   private readonly avatars: AvatarCache;
   private readonly openDeckLink: OpenDeckWsLink | undefined;
+  private readonly configController: ConfigController | undefined;
 
   private renderedLayout: DeckLayout | null = null;
   private reconfigureTimer: ReturnType<typeof setTimeout> | undefined;
@@ -94,6 +104,22 @@ export class DeckordService {
         }),
       );
     }
+
+    // Config UI endpoints (Phase 9): only when the stores are wired (headless main
+    // and the Electron shell do; bare tests don't).
+    if (deps.settingsStore && deps.secretStore) {
+      this.configController = new ConfigController({
+        config,
+        settings: deps.settingsStore,
+        secrets: deps.secretStore,
+        broadcast: (message) => this.ws.broadcast(message),
+        providerKind: () => this.voice.providerKind,
+        restart:
+          deps.onRestart ??
+          (async () => this.log.warn('restart requested but no onRestart hook is wired')),
+        log: log.child('config'),
+      });
+    }
   }
 
   async start(): Promise<void> {
@@ -125,6 +151,12 @@ export class DeckordService {
     host.onButtonDown((event) => this.handleButton(event));
     this.ws.onClientConnect((client) => this.sendSnapshot(client));
     this.ws.onMockCommand((command, userId) => this.handleMockCommand(command, userId));
+    if (this.configController) {
+      const controller = this.configController;
+      // Send the current config after the snapshot, and handle config-domain messages.
+      this.ws.onClientConnect((client) => void controller.sendTo(client));
+      this.ws.onConfigMessage((message, client) => void controller.handle(message, client));
+    }
     this.voice.onUpdate((state) => this.refreshDeck(state));
     this.voice.onStatus((status) => this.broadcastStatus(status));
 

@@ -37,3 +37,9 @@ export type ClientToServiceMessage = z.infer<typeof ClientToServiceMessageSchema
 
 export type ServiceToClientType = ServiceToClientMessage['type'];
 export type ClientToServiceType = ClientToServiceMessage['type'];
+
+/** The config-domain subset of client → service messages (Phase 9). */
+export type ConfigClientMessage = Extract<
+  ClientToServiceMessage,
+  { type: 'get_config' | 'set_config' | 'connect_discord' | 'restart_service' }
+>;
