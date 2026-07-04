@@ -381,7 +381,12 @@ Deliverables — **code complete, pending verification on a real OpenDeck + devi
 **Goal:** support StreamDock / AJAZZ hardware, specifically the **AKP05 PRO**
 (**10 LCD keys**), behind the same `IDeckAdapter` contract.
 
-Deliverables (all **TODO**):
+> **Status: DEFERRED.** The AKP05 PRO already works through **OpenDeck** (Phase 7),
+> so a direct USB-HID adapter is not on the critical path. This phase remains a
+> future optimization (lower latency, no OpenDeck dependency) rather than a blocker.
+> See [distribution](distribution.md) and [adapters/opendeck.md](adapters/opendeck.md).
+
+Deliverables (all **TODO**, deferred):
 
 - **TODO** — `StreamDockAdapter` implementing `IDeckAdapter` for the AKP05 PRO.
 - **TODO** — 10-LCD-key layout spec (this maps cleanly onto the current
@@ -401,26 +406,66 @@ Deliverables (all **TODO**):
 **Goal:** ship Deckord as an installable, self-contained desktop product with a real
 Discord app approval.
 
-Deliverables (all **TODO**):
+Deliverables grouped by area. Statuses reflect that some Phase 4 plumbing (the
+interactive `AUTHORIZE` → token exchange in `DiscordAuthenticator`) already exists
+and only needs a productized entry point.
 
-- **TODO** — **Installer**: packaged desktop build for Windows/macOS/Linux (bundling
-  the service + a UI shell instead of the dev-mode Vite + `tsx watch`).
-- **TODO** — **System tray**: background tray presence with connect/disconnect,
-  status, and quit.
-- **TODO** — **Auto-start**: launch on login / OS startup integration.
-- **TODO** — **Config UI**: replace environment variables
-  ([`config/index.ts`](../apps/deckord-service/src/config/index.ts)) with a settings
-  screen (provider choice, WS host/port/token, mock knobs, log level, app name).
-- **TODO** — **Privacy policy**: a shipped privacy policy consistent with the
+**Configuration & bring-your-own Discord app**
+
+- **DONE** — **Persisted settings store**: a `settings.json` in the data dir layered
+  over the env defaults in
+  ([`config/index.ts`](../apps/deckord-service/src/config/index.ts)), so config
+  survives restarts and is edited from the UI instead of environment variables.
+- **DONE** — **Bring-your-own Discord app**: the user supplies their own `client_id`
+  / `client_secret`. Until the public Deckord app has Discord RPC approval, every
+  user registers their own application; credentials are entered in the UI, persisted
+  (secret secured), and drive the existing `AUTHORIZE` flow.
+- **DONE** — **Config transport**: a WebSocket get/set-config protocol so the UI
+  reads and writes settings live. Provider / credential / port changes are applied
+  by a service restart ("restart to apply").
+- **DONE** — **Config UI**: a settings screen (Discord credentials + Connect,
+  provider choice, WS host/port/token, OpenDeck toggle, mock knobs, log level, app
+  name) replacing environment variables.
+- **TODO** — **First-run onboarding**: a guided first launch (enter credentials →
+  connect Discord → done) instead of a blank screen.
+
+**Security**
+
+- **DONE** — **OS-secured secret storage**: the Discord token AND the user-supplied
+  `client_secret` go through a `SecretStore` interface with a file (`0600`) fallback
+  for the headless service and an Electron `safeStorage` implementation (Windows
+  DPAPI / macOS Keychain / libsecret) in the desktop shell. Replaces
+  `FileTokenStore`'s plaintext JSON.
+- **DONE** — **Productize the `AUTHORIZE` flow**: the plumbing exists
+  (`DiscordAuthenticator` → `client.authorize` → token exchange); a "Connect Discord"
+  action triggers a restart into the Discord provider and surfaces progress/errors,
+  so end users log in interactively without a pre-obtained `DISCORD_ACCESS_TOKEN`.
+- **DONE** — **Privacy policy**: a shipped privacy policy consistent with the
   README's privacy stance (loopback-only, read-only scopes, no message reading, data
   stays local).
-- **TODO** — **Diagnostics**: a diagnostics/logs view surfacing the typed error
-  codes ([`errors.ts`](../packages/shared/src/errors.ts)) and provider/connection
-  status for support and troubleshooting.
-- **TODO** — **OS-secured token storage**: replace `FileTokenStore`'s plaintext JSON
-  with a platform-secured store (Windows DPAPI / Credential Manager, macOS Keychain,
-  libsecret) behind the existing `TokenStore` interface.
-- **TODO** — **Complete OAuth `AUTHORIZE` flow** (finishing Phase 4) so end users can
-  log in interactively without a pre-obtained `DISCORD_ACCESS_TOKEN`.
-- **TODO** — **Discord approval**: register/verify the Discord application and obtain
-  approval for the requested read-only voice scopes for public distribution.
+
+**Diagnostics**
+
+- **DONE** — **Diagnostics view + export**: surface the typed error codes
+  ([`errors.ts`](../packages/shared/src/errors.ts)) and provider/connection status,
+  and export a redacted diagnostics bundle for support.
+
+**Packaging & distribution (Electron)**
+
+- **DONE (scaffold)** — **Electron shell**: an `apps/deckord-desktop` Electron app
+  that runs the service in-process, shows the config UI in a window, and owns the
+  tray. Framework decision: Electron for the MVP (see [distribution](distribution.md)).
+- **DONE (scaffold)** — **System tray**: background tray with connect/disconnect,
+  status, open settings, and quit; single-instance lock.
+- **DONE (scaffold)** — **Auto-start**: launch on login (`setLoginItemSettings`).
+- **DONE (scaffold)** — **Installer**: electron-builder config for Windows/macOS/Linux
+  (bundling the service + UI instead of dev-mode Vite + `tsx watch`).
+- **TODO** — **Code signing & notarization**: Windows Authenticode + macOS
+  notarization so installers aren't flagged.
+- **TODO** — **Auto-update** *(optional / later)*: an update channel for shipped builds.
+
+**Discord distribution**
+
+- **TODO** — **Discord approval**: register/verify the public Deckord application and
+  obtain approval for the read-only voice scopes, so users no longer need their own
+  `client_id` (bring-your-own remains the fallback / power-user path).

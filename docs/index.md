@@ -21,8 +21,13 @@ and badges — is device-agnostic.
 - **Phase 5 (renderer)** — avatar caching, identicon, and server-side PNG rendering
   (`@deckord/image-renderer`) for physical decks.
 - **Phase 6 (adapter system)** — capability negotiation + a runtime adapter registry.
-- **Next:** Phase 7 (OpenDeck adapter), Phase 8 (StreamDock / AJAZZ AKP05 PRO),
-  Phase 9 (productization).
+- **Phase 7 (OpenDeck adapter)** — physical decks via the OpenDeck relay (Variant B).
+- **Phase 9 (productization)** — persisted settings + bring-your-own Discord app,
+  OS-secured secrets, diagnostics, and an Electron desktop shell (scaffold). See
+  [distribution](https://github.com/atomskz/deckord/blob/main/docs/distribution.md).
+- **Deferred:** Phase 8 (direct AKP05 PRO USB-HID adapter) — the AKP05 PRO already
+  works through OpenDeck.
+- **Next:** first-run onboarding, code signing/notarization, and Discord approval.
 
 ## Pipeline
 
@@ -52,6 +57,7 @@ The detailed docs live in the repository (rendered on GitHub):
 - [Adapter API](https://github.com/atomskz/deckord/blob/main/docs/adapter-api.md) — implementing a new deck adapter
 - [Discord RPC](https://github.com/atomskz/deckord/blob/main/docs/discord-rpc.md) — the RPC/auth model
 - [OpenDeck adapter decision](https://github.com/atomskz/deckord/blob/main/docs/adapters/opendeck.md)
+- [Distribution & packaging](https://github.com/atomskz/deckord/blob/main/docs/distribution.md) — Phase 9: Electron shell, config model, bring-your-own Discord app
 - [Testing on Windows](https://github.com/atomskz/deckord/blob/main/docs/testing-windows.md)
 
 ## Privacy
