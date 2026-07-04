@@ -32,10 +32,17 @@ export type ConfigControllerDeps = {
 export class ConfigController {
   /** True once a saved change is waiting for a restart to take effect. */
   private pendingRestart = false;
+  /** Serialize handling so e.g. a Save-then-Connect burst is applied in order. */
+  private queue: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: ConfigControllerDeps) {}
 
-  async handle(message: ConfigClientMessage, client: Client): Promise<void> {
+  handle(message: ConfigClientMessage, client: Client): Promise<void> {
+    this.queue = this.queue.then(() => this.process(message, client));
+    return this.queue;
+  }
+
+  private async process(message: ConfigClientMessage, client: Client): Promise<void> {
     try {
       switch (message.type) {
         case 'get_config':

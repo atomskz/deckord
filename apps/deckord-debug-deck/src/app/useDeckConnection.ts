@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ClientToServiceMessage,
+  ConfigPayload,
   DeckLayout,
   ServiceToClientMessage,
   VoiceChannelState,
@@ -18,6 +19,7 @@ export type DeckConnection = {
   status: ConnectionStatus;
   voice: VoiceChannelState | null;
   deck: DeckLayout | null;
+  config: ConfigPayload | null;
   log: LogEntry[];
   send: (message: ClientToServiceMessage) => void;
 };
@@ -28,6 +30,7 @@ export function useDeckConnection(): DeckConnection {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [voice, setVoice] = useState<VoiceChannelState | null>(null);
   const [deck, setDeck] = useState<DeckLayout | null>(null);
+  const [config, setConfig] = useState<ConfigPayload | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const socketRef = useRef<DeckSocket | null>(null);
   const logId = useRef(0);
@@ -68,6 +71,9 @@ export function useDeckConnection(): DeckConnection {
               : prev,
           );
           break;
+        case 'config':
+          setConfig(message.payload);
+          break;
         case 'status':
           appendLog(message.payload.level, message.payload.message);
           break;
@@ -93,5 +99,5 @@ export function useDeckConnection(): DeckConnection {
     socketRef.current?.send(message);
   }, []);
 
-  return { status, voice, deck, log, send };
+  return { status, voice, deck, config, log, send };
 }

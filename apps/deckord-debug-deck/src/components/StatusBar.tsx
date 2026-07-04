@@ -4,9 +4,11 @@ import type { ConnectionStatus } from '../services/DeckSocket';
 type Props = {
   status: ConnectionStatus;
   voice: VoiceChannelState | null;
+  onToggleSettings: () => void;
+  settingsOpen: boolean;
 };
 
-export function StatusBar({ status, voice }: Props) {
+export function StatusBar({ status, voice, onToggleSettings, settingsOpen }: Props) {
   return (
     <header className="status-bar">
       <div className="brand">
@@ -21,6 +23,14 @@ export function StatusBar({ status, voice }: Props) {
           {voice?.connected ? `in ${voice.channelName ?? 'voice'}` : 'not in voice'}
         </span>
         <span className="pill">users: {voice?.users.length ?? 0}</span>
+        <button
+          type="button"
+          className={`pill pill-button ${settingsOpen ? 'pill-ok' : ''}`}
+          onClick={onToggleSettings}
+          aria-pressed={settingsOpen}
+        >
+          {settingsOpen ? '✕ close' : '⚙ settings'}
+        </button>
       </div>
     </header>
   );
