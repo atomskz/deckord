@@ -1,5 +1,5 @@
 import type { MockCommand } from '@deckord/ipc-contract';
-import { FileTokenStore } from '@deckord/discord-rpc';
+import { FileTokenStore, type TokenStore } from '@deckord/discord-rpc';
 import { toDeckordError, type Logger, type VoiceChannelState } from '@deckord/shared';
 import { resolveInitialProvider, type DeckordConfig } from '../config/index';
 import { DiscordVoiceProvider } from './DiscordVoiceProvider';
@@ -31,6 +31,9 @@ export class VoiceService {
   constructor(
     private readonly config: DeckordConfig,
     private readonly log: Logger,
+    /** Where the Discord OAuth token is persisted. Defaults to a plaintext file;
+     * the service injects an OS-secured (SecretStore-backed) store in Phase 9. */
+    private readonly tokenStore: TokenStore = new FileTokenStore(config.discordTokenPath),
   ) {}
 
   async start(): Promise<void> {
@@ -69,8 +72,7 @@ export class VoiceService {
   // --- internal ------------------------------------------------------------
 
   private async tryStartDiscord(): Promise<boolean> {
-    const store = new FileTokenStore(this.config.discordTokenPath);
-    const provider = new DiscordVoiceProvider(this.config.discord, store, this.log.child('discord'));
+    const provider = new DiscordVoiceProvider(this.config.discord, this.tokenStore, this.log.child('discord'));
     try {
       await this.use(provider);
       return true;

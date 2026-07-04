@@ -5,6 +5,7 @@ import {
   type DeckCapabilities,
 } from '@deckord/deck-adapter';
 import { OpenDeckFactory } from '@deckord/adapter-opendeck';
+import type { TokenStore } from '@deckord/discord-rpc';
 import { DEFAULT_SLOT_CONFIG, SlotManager } from '@deckord/deck-core';
 import { DEFAULT_THEME, renderLayout, toRenderedSlot, type RenderContext } from '@deckord/renderer';
 import type { MockCommand } from '@deckord/ipc-contract';
@@ -23,6 +24,12 @@ import { slotConfigFromCapabilities } from './slotConfig';
 import { WsServer, type WsClient } from './server/WsServer';
 import { VoiceService } from './voice/VoiceService';
 import type { ProviderStatus } from './voice/types';
+
+/** Injectable dependencies (stores). Defaults keep the service self-contained. */
+export type DeckordServiceDeps = {
+  /** OAuth token persistence. Defaults to a plaintext file inside the service. */
+  tokenStore?: TokenStore;
+};
 
 /**
  * The orchestrator. Owns the pipeline:
@@ -55,6 +62,7 @@ export class DeckordService {
   constructor(
     private readonly config: DeckordConfig,
     private readonly log: Logger,
+    deps: DeckordServiceDeps = {},
   ) {
     this.avatars = new AvatarCache({ dir: config.avatarCacheDir }, log.child('avatars'));
     this.slots = new SlotManager(DEFAULT_SLOT_CONFIG);
@@ -72,7 +80,7 @@ export class DeckordService {
       new DebugBrowserDeckFactory(this.ws, capabilities),
     );
 
-    this.voice = new VoiceService(config, log.child('voice'));
+    this.voice = new VoiceService(config, log.child('voice'), deps.tokenStore);
 
     // OpenDeck (Variant B): a loopback endpoint the relay plugin connects to. Only
     // wired when opted in, so we don't open a port for the debug-only default.
