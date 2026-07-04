@@ -3,10 +3,12 @@ import type {
   ClientToServiceMessage,
   ConfigPayload,
   DeckordSettings,
+  DiagnosticsPayload,
 } from '@deckord/ipc-contract';
 
 type Props = {
   config: ConfigPayload | null;
+  diagnostics: DiagnosticsPayload | null;
   send: (message: ClientToServiceMessage) => void;
   onClose: () => void;
 };
@@ -74,7 +76,7 @@ function settingsFromForm(f: FormState): DeckordSettings {
   };
 }
 
-export function SettingsPanel({ config, send, onClose }: Props) {
+export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
 
   // Ask for the current config on mount (the service also pushes it on connect).
@@ -264,6 +266,31 @@ export function SettingsPanel({ config, send, onClose }: Props) {
           Speaking interval (ms)
           <input value={form.mockSpeakingMs} onChange={(e) => set('mockSpeakingMs', e.target.value)} placeholder="1600" inputMode="numeric" />
         </label>
+      </fieldset>
+
+      <fieldset className="settings-group">
+        <legend>Diagnostics</legend>
+        <p className="hint">
+          A redacted support bundle (no secret values). Also written to
+          diagnostics.json in the data directory.
+        </p>
+        <div className="settings-actions">
+          <button type="button" className="control-button" onClick={() => send({ type: 'get_diagnostics' })}>
+            Generate diagnostics
+          </button>
+          {diagnostics && (
+            <button
+              type="button"
+              className="control-button"
+              onClick={() => void navigator.clipboard?.writeText(JSON.stringify(diagnostics, null, 2))}
+            >
+              Copy to clipboard
+            </button>
+          )}
+        </div>
+        {diagnostics && (
+          <pre className="settings-diagnostics">{JSON.stringify(diagnostics, null, 2)}</pre>
+        )}
       </fieldset>
 
       <div className="settings-actions sticky">

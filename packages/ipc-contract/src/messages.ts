@@ -3,6 +3,7 @@ import type {
   ClientToServiceMessageSchema,
   ConfigPayloadSchema,
   DeckordSettingsSchema,
+  DiagnosticsPayloadSchema,
   LogLevelSchema,
   MockCommandSchema,
   ProviderPreferenceSchema,
@@ -28,6 +29,7 @@ export type ProviderPreferenceWire = z.infer<typeof ProviderPreferenceSchema>;
 export type DeckordSettings = z.infer<typeof DeckordSettingsSchema>;
 export type ConfigPayload = z.infer<typeof ConfigPayloadSchema>;
 export type SetConfigPayload = z.infer<typeof SetConfigPayloadSchema>;
+export type DiagnosticsPayload = z.infer<typeof DiagnosticsPayloadSchema>;
 
 /** service → debug UI. */
 export type ServiceToClientMessage = z.infer<typeof ServiceToClientMessageSchema>;

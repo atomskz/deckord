@@ -20,7 +20,8 @@ import {
 import type { DeckordConfig } from './config/index';
 import { ConfigController } from './config/ConfigController';
 import type { SettingsStore } from './config/settings';
-import type { SecretStore } from './secrets/SecretStore';
+import { SECRET_KEYS, type SecretStore } from './secrets/SecretStore';
+import { buildDiagnostics, EventRing, exportDiagnostics } from './diagnostics/Diagnostics';
 import { AvatarCache } from './avatars/AvatarCache';
 import { OpenDeckWsLink } from './opendeck/OpenDeckWsLink';
 import { slotConfigFromCapabilities } from './slotConfig';
@@ -57,6 +58,9 @@ export class DeckordService {
   private readonly avatars: AvatarCache;
   private readonly openDeckLink: OpenDeckWsLink | undefined;
   private readonly configController: ConfigController | undefined;
+  private readonly secrets: SecretStore | undefined;
+  private readonly events = new EventRing();
+  private deckInfo = { adapter: '', rows: 0, columns: 0, slotCount: 0 };
 
   private renderedLayout: DeckLayout | null = null;
   private reconfigureTimer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +95,7 @@ export class DeckordService {
     );
 
     this.voice = new VoiceService(config, log.child('voice'), deps.tokenStore);
+    this.secrets = deps.secretStore;
 
     // OpenDeck (Variant B): a loopback endpoint the relay plugin connects to. Only
     // wired when opted in, so we don't open a port for the debug-only default.
@@ -136,6 +141,7 @@ export class DeckordService {
     // Configure deck-core from the selected deck's capabilities (grid follows the
     // device), and react to runtime capability changes (hot-plug / re-assignment).
     this.slots = new SlotManager(slotConfigFromCapabilities(selection.adapter.getCapabilities()));
+    this.setDeckInfo(selection.factory.id, selection.adapter.getCapabilities());
     selection.adapter.onCapabilitiesChanged((caps) => this.reconfigure(caps));
 
     // Initialize a rendered layout so the first client to connect always gets a
@@ -157,6 +163,7 @@ export class DeckordService {
       this.ws.onClientConnect((client) => void controller.sendTo(client));
       this.ws.onConfigMessage((message, client) => void controller.handle(message, client));
     }
+    this.ws.onDiagnosticsRequest((client) => void this.handleDiagnostics(client));
     this.voice.onUpdate((state) => this.refreshDeck(state));
     this.voice.onStatus((status) => this.broadcastStatus(status));
 
@@ -204,9 +211,36 @@ export class DeckordService {
   private applyReconfigure(caps: DeckCapabilities): void {
     this.log.info(`Deck capabilities changed: ${caps.slotCount} slots (${caps.rows}×${caps.columns})`);
     this.slots = new SlotManager(slotConfigFromCapabilities(caps));
+    this.setDeckInfo(this.deckInfo.adapter, caps);
     this.renderedLayout = null;
     void this.host?.reset().catch((error) => this.log.warn(`Deck reset failed: ${String(error)}`));
     this.refreshDeck(this.voice.getState());
+  }
+
+  private setDeckInfo(adapter: string, caps: DeckCapabilities): void {
+    this.deckInfo = { adapter, rows: caps.rows, columns: caps.columns, slotCount: caps.slotCount };
+  }
+
+  // --- diagnostics ---------------------------------------------------------
+
+  private async handleDiagnostics(client: WsClient): Promise<void> {
+    const payload = buildDiagnostics({
+      config: this.config,
+      activeProvider: this.voice.providerKind,
+      voice: this.voice.getState(),
+      deck: this.deckInfo,
+      hasClientSecret:
+        Boolean(this.config.discord.clientSecret) ||
+        (await this.secrets?.has(SECRET_KEYS.clientSecret).catch(() => false)) === true,
+      hasToken: (await this.secrets?.has(SECRET_KEYS.token).catch(() => false)) === true,
+      events: this.events.list(),
+      now: Date.now(),
+    });
+    const exportedTo = await exportDiagnostics(this.config.dataDir, payload).catch((error) => {
+      this.log.warn(`Diagnostics export failed: ${String(error)}`);
+      return undefined;
+    });
+    client.send({ type: 'diagnostics', payload: { ...payload, exportedTo } });
   }
 
   // --- pipeline ------------------------------------------------------------
@@ -280,6 +314,7 @@ export class DeckordService {
   }
 
   private broadcastStatus(status: ProviderStatus): void {
+    this.events.push({ level: status.level, message: status.message, code: status.code });
     this.ws.broadcast({
       type: 'status',
       payload: { level: status.level, message: status.message, code: status.code },
@@ -287,6 +322,7 @@ export class DeckordService {
   }
 
   private status(level: ProviderStatus['level'], message: string): void {
+    this.events.push({ level, message });
     this.ws.broadcast({ type: 'status', payload: { level, message } });
   }
 }

@@ -3,6 +3,7 @@ import type {
   ClientToServiceMessage,
   ConfigPayload,
   DeckLayout,
+  DiagnosticsPayload,
   ServiceToClientMessage,
   VoiceChannelState,
 } from '@deckord/ipc-contract';
@@ -20,6 +21,7 @@ export type DeckConnection = {
   voice: VoiceChannelState | null;
   deck: DeckLayout | null;
   config: ConfigPayload | null;
+  diagnostics: DiagnosticsPayload | null;
   log: LogEntry[];
   send: (message: ClientToServiceMessage) => void;
 };
@@ -31,6 +33,7 @@ export function useDeckConnection(): DeckConnection {
   const [voice, setVoice] = useState<VoiceChannelState | null>(null);
   const [deck, setDeck] = useState<DeckLayout | null>(null);
   const [config, setConfig] = useState<ConfigPayload | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsPayload | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const socketRef = useRef<DeckSocket | null>(null);
   const logId = useRef(0);
@@ -74,6 +77,10 @@ export function useDeckConnection(): DeckConnection {
         case 'config':
           setConfig(message.payload);
           break;
+        case 'diagnostics':
+          setDiagnostics(message.payload);
+          appendLog('info', `Diagnostics exported to ${message.payload.exportedTo ?? '(memory)'}`);
+          break;
         case 'status':
           appendLog(message.payload.level, message.payload.message);
           break;
@@ -99,5 +106,5 @@ export function useDeckConnection(): DeckConnection {
     socketRef.current?.send(message);
   }, []);
 
-  return { status, voice, deck, config, log, send };
+  return { status, voice, deck, config, diagnostics, log, send };
 }

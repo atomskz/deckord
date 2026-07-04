@@ -9,7 +9,7 @@ import { VoicePanel } from '../components/VoicePanel';
 import { useDeckConnection } from './useDeckConnection';
 
 export function App() {
-  const { status, voice, deck, config, log, send } = useDeckConnection();
+  const { status, voice, deck, config, diagnostics, log, send } = useDeckConnection();
   const [view, setView] = useState<'deck' | 'settings'>('deck');
 
   const onDown = useCallback(
@@ -35,7 +35,12 @@ export function App() {
       />
       {view === 'settings' ? (
         <main className="layout">
-          <SettingsPanel config={config} send={send} onClose={() => setView('deck')} />
+          <SettingsPanel
+            config={config}
+            diagnostics={diagnostics}
+            send={send}
+            onClose={() => setView('deck')}
+          />
         </main>
       ) : (
         <main className="layout">

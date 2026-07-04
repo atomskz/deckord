@@ -107,6 +107,8 @@ export const DeckLayoutSchema = z.object({
 
 export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 export const ProviderPreferenceSchema = z.enum(['auto', 'mock', 'discord-rpc']);
+/** Severity of a status/log line surfaced to the UI (also used by diagnostics). */
+export const StatusLevelSchema = z.enum(['info', 'warning', 'error']);
 
 /**
  * The editable subset of the service config. Every field is optional: an absent
@@ -163,6 +165,37 @@ export const ConfigPayloadSchema = z.object({
   }),
 });
 
+/** service → UI: a redacted diagnostics bundle for support/troubleshooting. */
+export const DiagnosticsPayloadSchema = z.object({
+  generatedAt: z.number(),
+  appName: z.string(),
+  protocolVersion: z.number(),
+  platform: z.string(),
+  nodeVersion: z.string(),
+  dataDir: z.string(),
+  provider: z.object({
+    preference: ProviderPreferenceSchema,
+    active: VoiceProviderKindSchema,
+    connected: z.boolean(),
+    channelName: z.string().nullable(),
+    users: z.number(),
+  }),
+  deck: z.object({
+    adapter: z.string(),
+    rows: z.number(),
+    columns: z.number(),
+    slotCount: z.number(),
+  }),
+  /** Effective settings, redacted (no secret values; ws.token shown as '***'). */
+  settings: DeckordSettingsSchema,
+  secrets: z.object({ hasClientSecret: z.boolean(), hasToken: z.boolean() }),
+  recentEvents: z.array(
+    z.object({ level: StatusLevelSchema, message: z.string(), code: z.string().optional() }),
+  ),
+  /** Path the bundle was also written to, when exported. */
+  exportedTo: z.string().optional(),
+});
+
 /** UI → service: write settings and/or secrets (loopback only). */
 export const SetConfigPayloadSchema = z.object({
   settings: DeckordSettingsSchema.optional(),
@@ -179,8 +212,6 @@ export const SetConfigPayloadSchema = z.object({
 // ---------------------------------------------------------------------------
 // Wire messages
 // ---------------------------------------------------------------------------
-
-export const StatusLevelSchema = z.enum(['info', 'warning', 'error']);
 
 export const ServiceToClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
@@ -202,6 +233,7 @@ export const ServiceToClientMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({ type: z.literal('config'), payload: ConfigPayloadSchema }),
+  z.object({ type: z.literal('diagnostics'), payload: DiagnosticsPayloadSchema }),
 ]);
 
 export const MockCommandSchema = z.enum([
@@ -233,6 +265,8 @@ export const ClientToServiceMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('connect_discord') }),
   /** Apply pending settings by restarting the service pipeline. */
   z.object({ type: z.literal('restart_service') }),
+  /** Request a redacted diagnostics bundle (also exported to a file). */
+  z.object({ type: z.literal('get_diagnostics') }),
 ]);
 
 // ---------------------------------------------------------------------------

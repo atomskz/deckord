@@ -490,6 +490,20 @@ body {
   padding: 10px 0;
   border-top: 1px solid var(--border);
 }
+.settings-diagnostics {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--subtitle);
+  white-space: pre;
+}
 .control-button.primary {
   background: var(--selected);
   border-color: var(--selected);

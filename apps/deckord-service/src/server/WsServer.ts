@@ -26,6 +26,7 @@ type ButtonHandler = (event: { kind: DeckButtonEventKind; slotIndex: number }) =
 type MockHandler = (command: MockCommand, userId?: string) => void;
 type ConnectHandler = (client: WsClient) => void;
 type ConfigHandler = (message: ConfigClientMessage, client: WsClient) => void;
+type DiagnosticsHandler = (client: WsClient) => void;
 
 /**
  * Local WebSocket transport. Binds to loopback only, optionally gated by a shared
@@ -41,6 +42,7 @@ export class WsServer implements DeckWire {
   private readonly mockHandlers: MockHandler[] = [];
   private readonly connectHandlers: ConnectHandler[] = [];
   private readonly configHandlers: ConfigHandler[] = [];
+  private readonly diagnosticsHandlers: DiagnosticsHandler[] = [];
 
   constructor(
     private readonly config: WsServerConfig,
@@ -93,6 +95,11 @@ export class WsServer implements DeckWire {
   /** Config-domain messages (get/set-config, connect_discord, restart_service). */
   onConfigMessage(handler: ConfigHandler): void {
     this.configHandlers.push(handler);
+  }
+
+  /** A request for a diagnostics bundle. */
+  onDiagnosticsRequest(handler: DiagnosticsHandler): void {
+    this.diagnosticsHandlers.push(handler);
   }
 
   get clientCount(): number {
@@ -178,6 +185,11 @@ export class WsServer implements DeckWire {
       case 'restart_service': {
         const client = this.makeClient(clientId);
         if (client) this.configHandlers.forEach((h) => h(message, client));
+        break;
+      }
+      case 'get_diagnostics': {
+        const client = this.makeClient(clientId);
+        if (client) this.diagnosticsHandlers.forEach((h) => h(client));
         break;
       }
     }

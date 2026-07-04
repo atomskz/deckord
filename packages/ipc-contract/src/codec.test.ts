@@ -136,13 +136,37 @@ describe('config messages (Phase 9)', () => {
     expect(result.value).toEqual(message);
   });
 
-  it('round-trips get_config / connect_discord / restart_service', () => {
-    for (const type of ['get_config', 'connect_discord', 'restart_service'] as const) {
+  it('round-trips get_config / connect_discord / restart_service / get_diagnostics', () => {
+    for (const type of ['get_config', 'connect_discord', 'restart_service', 'get_diagnostics'] as const) {
       const result = decodeClientMessage(encode({ type }));
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       expect(result.value).toEqual({ type });
     }
+  });
+
+  it('round-trips a diagnostics message', () => {
+    const message: ServiceToClientMessage = {
+      type: 'diagnostics',
+      payload: {
+        generatedAt: 1_720_000_000_000,
+        appName: 'Deckord',
+        protocolVersion: 1,
+        platform: 'linux x64',
+        nodeVersion: 'v22.0.0',
+        dataDir: '/home/u/.deckord',
+        provider: { preference: 'auto', active: 'mock', connected: false, channelName: null, users: 0 },
+        deck: { adapter: 'debug-browser', rows: 2, columns: 5, slotCount: 10 },
+        settings: { provider: 'auto', ws: { host: '127.0.0.1', port: 8787, token: '***' } },
+        secrets: { hasClientSecret: true, hasToken: false },
+        recentEvents: [{ level: 'warning', message: 'fell back to mock', code: 'PROVIDER_SWITCHED_TO_MOCK' }],
+        exportedTo: '/home/u/.deckord/diagnostics.json',
+      },
+    };
+    const result = decodeServiceMessage(encode(message));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.value).toEqual(message);
   });
 
   it('strips unknown keys from settings rather than rejecting', () => {
