@@ -6,7 +6,7 @@ import {
   type RenderedDeckSlot,
 } from '@deckord/shared';
 import type { IDeckAdapter, DeckButtonHandler } from './IDeckAdapter';
-import type { DeckWire } from './types';
+import type { DeckCapabilities, DeckWire } from './types';
 
 /**
  * MVP adapter: renders the deck into a browser window over a WebSocket wire and
@@ -24,7 +24,7 @@ export class DebugBrowserDeckAdapter implements IDeckAdapter {
 
   constructor(
     private readonly wire: DeckWire,
-    private readonly spec: DeckLayoutSpec,
+    private readonly capabilities: DeckCapabilities,
   ) {
     this.wire.onButton(({ kind, slotIndex }) => {
       const event: DeckButtonEvent = {
@@ -47,7 +47,11 @@ export class DebugBrowserDeckAdapter implements IDeckAdapter {
   }
 
   getLayoutSpec(): DeckLayoutSpec {
-    return this.spec;
+    return this.capabilities;
+  }
+
+  getCapabilities(): DeckCapabilities {
+    return this.capabilities;
   }
 
   async setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void> {
@@ -65,7 +69,7 @@ export class DebugBrowserDeckAdapter implements IDeckAdapter {
   }
 
   async clearAll(): Promise<void> {
-    for (let i = 0; i < this.spec.slotCount; i++) {
+    for (let i = 0; i < this.capabilities.slotCount; i++) {
       await this.clearSlot(i);
     }
   }

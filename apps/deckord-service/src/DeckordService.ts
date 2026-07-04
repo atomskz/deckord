@@ -1,14 +1,12 @@
-import { DebugBrowserDeckAdapter, DeckAdapterHost } from '@deckord/deck-adapter';
+import {
+  DebugBrowserDeckAdapter,
+  DeckAdapterHost,
+  type DeckCapabilities,
+} from '@deckord/deck-adapter';
 import { DEFAULT_SLOT_CONFIG, SlotManager } from '@deckord/deck-core';
 import { DEFAULT_THEME, renderLayout, toRenderedSlot, type RenderContext } from '@deckord/renderer';
 import type { MockCommand } from '@deckord/ipc-contract';
-import type {
-  DeckButtonEvent,
-  DeckLayout,
-  DeckLayoutSpec,
-  Logger,
-  VoiceChannelState,
-} from '@deckord/shared';
+import type { DeckButtonEvent, DeckLayout, Logger, VoiceChannelState } from '@deckord/shared';
 import type { DeckordConfig } from './config/index';
 import { AvatarCache } from './avatars/AvatarCache';
 import { WsServer, type WsClient } from './server/WsServer';
@@ -40,12 +38,14 @@ export class DeckordService {
     this.slots = new SlotManager(DEFAULT_SLOT_CONFIG);
     this.ws = new WsServer(config.ws, log.child('ws'));
 
-    const spec: DeckLayoutSpec = {
+    const capabilities: DeckCapabilities = {
       rows: DEFAULT_SLOT_CONFIG.rows,
       columns: DEFAULT_SLOT_CONFIG.columns,
       slotCount: DEFAULT_SLOT_CONFIG.rows * DEFAULT_SLOT_CONFIG.columns,
+      imageFormats: ['css'],
+      hasTextApi: true,
     };
-    const adapter = new DebugBrowserDeckAdapter(this.ws, spec);
+    const adapter = new DebugBrowserDeckAdapter(this.ws, capabilities);
     this.host = new DeckAdapterHost(adapter, toRenderedSlot);
 
     this.voice = new VoiceService(config, log.child('voice'));

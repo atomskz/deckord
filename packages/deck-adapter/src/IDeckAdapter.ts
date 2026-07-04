@@ -1,4 +1,5 @@
 import type { DeckButtonEvent, DeckLayoutSpec, RenderedDeckSlot } from '@deckord/shared';
+import type { DeckCapabilities } from './types';
 
 /**
  * The replaceable bottom layer. Everything above (Discord voice, deck-core,
@@ -16,8 +17,11 @@ export interface IDeckAdapter {
   start(): Promise<void>;
   stop(): Promise<void>;
 
-  /** Physical/virtual capabilities of this deck (grid size, icon size, knobs). */
+  /** Grid spec of this deck (rows, columns, slot count, icon size, knobs). */
   getLayoutSpec(): DeckLayoutSpec;
+
+  /** Full capabilities — the grid spec plus how the device consumes visuals. */
+  getCapabilities(): DeckCapabilities;
 
   setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void>;
   clearSlot(slotIndex: number): Promise<void>;

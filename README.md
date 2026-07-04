@@ -47,35 +47,35 @@ Deckord is a pnpm monorepo. The service process owns the pipeline; the debug dec
 a separate browser app that talks to it over a loopback WebSocket.
 
 ```
-                       ┌─────────────────────────────────────────────────────────────┐
+                       ┌──────────────────────────────────────────────────────────────┐
                        │                    deckord-service (Node)                    │
                        │                                                              │
   Discord desktop      │   ┌───────────────┐                                          │
-  client (RPC over     │   │ DiscordVoice  │ ─┐                                        │
-  local IPC pipe)  ────┼──▶│   Provider    │  │  graceful fallback                     │
-                       │   └───────────────┘  ├──▶ VoiceService ──▶ deck-core ──▶ ...  │
-                       │   ┌───────────────┐  │   (normalized       (SlotManager:      │
-  (no Discord? use     │   │  MockVoice    │ ─┘    VoiceChannel      order + pages +    │
-   the built-in mock)  │   │   Provider    │       State)           status slot)       │
-                       │   └───────────────┘                            │              │
-                       │                                                 ▼              │
-                       │                        renderer ──▶ DeckAdapterHost ──▶        │
-                       │                    (titles, badges,   (diffs slots,           │
-                       │                     avatar, a11y)      pushes changes)         │
-                       │                                            │                   │
-                       │                              DebugBrowserDeckAdapter           │
-                       │                              (an IDeckAdapter — REPLACEABLE)    │
-                       │                                            │                   │
-                       │                                        WsServer                │
-                       │                              (loopback WebSocket, optional      │
-                       └──────────────────────────────── shared token) ────────────────┘
+  client (RPC over     │   │ DiscordVoice  │ ─┐                                       │
+  local IPC pipe)  ────┼──▶│   Provider    │  │  graceful fallback                    │
+                       │   └───────────────┘  ├──▶ VoiceService ──▶ deck-core ──▶ ... │
+                       │   ┌───────────────┐  │   (normalized       (SlotManager:     │
+  (no Discord? use     │   │  MockVoice    │ ─┘    VoiceChannel      order + pages +  │
+   the built-in mock)  │   │   Provider    │       State)           status slot)      │
+                       │   └───────────────┘                            │             │
+                       │                                                 ▼            │
+                       │                        renderer ──▶ DeckAdapterHost ──▶      │
+                       │                    (titles, badges,   (diffs slots,          │
+                       │                     avatar, a11y)      pushes changes)       │
+                       │                                            │                 │
+                       │                              DebugBrowserDeckAdapter         │
+                       │                              (an IDeckAdapter — REPLACEABLE) │
+                       │                                            │                 │
+                       │                                        WsServer              │
+                       │                              (loopback WebSocket, optional   │
+                       └──────────────────────────────── shared token) ───────────────┘
                                                             │        ▲
                                        slot/voice/status ▼  │        │ ▲ button + mock commands
                                                             ▼        │
                        ┌──────────────────────────────────────────────────────────────┐
-                       │              deckord-debug-deck (browser / React)              │
-                       │        renders the button grid, sends virtual presses,         │
-                       │             drives the mock via debug controls                 │
+                       │              deckord-debug-deck (browser / React)            │
+                       │        renders the button grid, sends virtual presses,       │
+                       │             drives the mock via debug controls               │
                        └──────────────────────────────────────────────────────────────┘
 ```
 
