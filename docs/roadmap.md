@@ -342,6 +342,14 @@ Deliverables:
 **Goal:** the first physical-device adapter, targeting OpenDeck-compatible hardware,
 behind the same `IDeckAdapter` contract.
 
+**Architecture decided** (see [docs/adapters/opendeck.md](./adapters/opendeck.md)):
+**Variant B — two processes.** Deckord stays a standalone daemon that owns Discord;
+OpenDeck integration is a thin host-launched **relay plugin** (`deckord.sdPlugin`),
+with all Elgato-protocol logic in `@deckord/adapter-opendeck` inside the service.
+Device layout/capabilities arrive as Elgato events (`-info` / `deviceDidConnect` /
+`willAppear`) → aggregated into `DeckCapabilities`; needs `onCapabilitiesChanged` +
+configuring `SlotManager` from capabilities (dynamic / hot-plug).
+
 Deliverables (all **TODO**):
 
 - **TODO** — `OpenDeckAdapter` implementing `IDeckAdapter`, translating slot writes
