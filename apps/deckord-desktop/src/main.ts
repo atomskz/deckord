@@ -36,7 +36,6 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => showWindow());
   app.whenReady().then(main).catch((error) => {
-    // eslint-disable-next-line no-console
     console.error('[deckord-desktop] failed to start:', error);
     app.quit();
   });

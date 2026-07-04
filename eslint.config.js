@@ -6,15 +6,14 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    // deckord-desktop is an Electron scaffold that needs its own (uninstalled-here)
-    // toolchain; it's excluded from the root lint/typecheck until built locally.
     ignores: [
       '**/dist/**',
       '**/build/**',
       '**/node_modules/**',
       '**/*.tsbuildinfo',
       'plugins/**',
-      'apps/deckord-desktop/**',
+      // deckord-desktop build outputs (bundled main + copied UI); the src is linted.
+      'apps/deckord-desktop/renderer/**',
     ],
   },
   js.configs.recommended,

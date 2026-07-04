@@ -19,16 +19,17 @@ only the window, tray, and OS integration — no business logic. That keeps the 
 open to swapping Electron for a lighter native-webview shell later (see
 [distribution](../../docs/distribution.md)) without touching the backend.
 
-## Status: scaffold
+## Status
 
-This app **cannot be built or run in the headless CI sandbox** (no display, no
-Electron binary). It is intentionally excluded from the root `build` / `typecheck`
-/ `lint` scripts. To work on it locally:
+After `pnpm install`, this app is part of the normal workspace tooling: it
+**typechecks**, **lints**, and **bundles** (`build` = esbuild → `dist/main.cjs`)
+like any other package. What still needs a real desktop is **launching the GUI**
+(Electron requires a display) and **producing/running an installer**.
 
 ```bash
-pnpm install                              # pulls electron, electron-builder, esbuild
-pnpm --filter deckord-desktop exec tsc --noEmit -p tsconfig.json   # typecheck
-pnpm --filter deckord-desktop start       # compile + build UI + launch Electron
+pnpm --filter deckord-desktop typecheck   # tsc against real Electron types
+pnpm --filter deckord-desktop build       # esbuild-bundle the main (service inlined)
+pnpm --filter deckord-desktop start       # compile + build UI + launch Electron (needs a display)
 pnpm --filter deckord-desktop dist        # produce an installer (nsis/dmg/AppImage)
 ```
 

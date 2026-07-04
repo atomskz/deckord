@@ -452,14 +452,19 @@ and only needs a productized entry point.
 
 **Packaging & distribution (Electron)**
 
-- **DONE (scaffold)** — **Electron shell**: an `apps/deckord-desktop` Electron app
-  that runs the service in-process, shows the config UI in a window, and owns the
-  tray. Framework decision: Electron for the MVP (see [distribution](distribution.md)).
-- **DONE (scaffold)** — **System tray**: background tray with connect/disconnect,
-  status, open settings, and quit; single-instance lock.
-- **DONE (scaffold)** — **Auto-start**: launch on login (`setLoginItemSettings`).
-- **DONE (scaffold)** — **Installer**: electron-builder config for Windows/macOS/Linux
-  (bundling the service + UI instead of dev-mode Vite + `tsx watch`).
+_The shell below typechecks, lints, and bundles as part of the workspace
+(`build` = esbuild → `dist/main.cjs`, service inlined). What is **not** verified in
+CI is launching the GUI (needs a display) and producing/running an installer._
+
+- **DONE** — **Electron shell**: an `apps/deckord-desktop` Electron app that runs the
+  service in-process, shows the config UI in a window, and owns the tray. Framework
+  decision: Electron for the MVP (see [distribution](distribution.md)).
+- **DONE** — **System tray**: background tray with open, restart service,
+  launch-at-login, and quit; single-instance lock + hide-to-tray.
+- **DONE** — **Auto-start**: launch on login (`setLoginItemSettings`).
+- **DONE (config)** — **Installer**: electron-builder config for Windows/macOS/Linux
+  (bundling the service + UI instead of dev-mode Vite + `tsx watch`); the packaging
+  run itself is untested headlessly.
 - **TODO** — **Code signing & notarization**: Windows Authenticode + macOS
   notarization so installers aren't flagged.
 - **TODO** — **Auto-update** *(optional / later)*: an update channel for shipped builds.
