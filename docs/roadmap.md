@@ -491,9 +491,8 @@ token merge-on-paste, `LogLevel` drift guard, Electron before-quit + lazy re-enc
 
 ### P0 — blockers for a public v1
 
-- [ ] **Licensing** *(release)* — add a `LICENSE` file, `license` fields in the
-  package.json(s), and third-party notices. Without it the project is legally
-  all-rights-reserved and unpublishable.
+- [x] **Licensing** *(release)* — MIT `LICENSE` file, `license: "MIT"` in every
+  package.json, and `THIRD-PARTY-NOTICES.md` (all runtime deps are MIT). ✅
 - [ ] **Electron native-module packaging** *(desktop)* — declare `@napi-rs/canvas`
   and `ws` as real deps of `deckord-desktop`, add `asarUnpack` for the Skia `.node`
   (incl. the `-win32-x64-msvc` optional dep), and ensure they resolve in the packaged

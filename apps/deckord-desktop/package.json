@@ -1,5 +1,6 @@
 {
   "name": "deckord-desktop",
+  "license": "MIT",
   "version": "0.1.0",
   "private": true,
   "description": "Deckord desktop shell (Electron): runs the service in-process, tray + config window.",
