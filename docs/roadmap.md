@@ -474,3 +474,116 @@ CI is launching the GUI (needs a display) and producing/running an installer._
 - **TODO** — **Discord approval**: register/verify the public Deckord application and
   obtain approval for the read-only voice scopes, so users no longer need their own
   `client_id` (bring-your-own remains the fallback / power-user path).
+
+---
+
+## Release readiness — audit backlog (2026-07-05)
+
+Findings from the full project audit, in **decreasing priority**. Overall verdict:
+a well-engineered **alpha / developer preview**, not a public v1 — the core pipeline
+(Discord RPC → deck-core → renderer → browser deck) is verified live, but packaging,
+licensing, default-security, onboarding, and real-hardware/cross-platform paths are
+not release-ready.
+
+_Already fixed in the Phase 9 review pass (not listed below): packaged-window blank
+(`base './'`), WS-token leak to the UI, numeric-field validation, `0600` on rewrites,
+token merge-on-paste, `LogLevel` drift guard, Electron before-quit + lazy re-encrypt._
+
+### P0 — blockers for a public v1
+
+- [ ] **Licensing** *(release)* — add a `LICENSE` file, `license` fields in the
+  package.json(s), and third-party notices. Without it the project is legally
+  all-rights-reserved and unpublishable.
+- [ ] **Electron native-module packaging** *(desktop)* — declare `@napi-rs/canvas`
+  and `ws` as real deps of `deckord-desktop`, add `asarUnpack` for the Skia `.node`
+  (incl. the `-win32-x64-msvc` optional dep), and ensure they resolve in the packaged
+  `node_modules`. Today both throw `MODULE_NOT_FOUND` and are excluded by `files:`, so
+  a packaged app crashes.
+- [ ] **Real assets + built installer** *(desktop)* — add `assets/tray.png` +
+  `icon.ico`/`icon.icns`, create the `assets/` dir referenced by `buildResources`,
+  then actually run `electron-builder` and smoke-run the installer on a clean Windows
+  host (install → tray → window → mock mode). The packaging pipeline has never run.
+- [ ] **Authenticate the loopback WS by default** *(security-privacy, ipc-ws)* —
+  auto-generate a per-install `DECKORD_WS_TOKEN` when unset, have the desktop shell
+  inject it into the bundled UI, refuse `set_config` credential writes on
+  unauthenticated connections, add an `Origin` allowlist, and constrain
+  `DECKORD_WS_HOST` to loopback. Today any local process can read/write Discord creds
+  via `set_config` on the ungated `127.0.0.1:8787`.
+- [ ] **Discord distribution model** *(release)* — either obtain Discord approval for
+  the public app, or explicitly scope v1 as bring-your-own/power-user. The mainstream
+  install-and-use path does not exist yet.
+
+### P1 — strongly wanted before shipping
+
+- [ ] **Discord RPC resilience** *(voice-discord)* — add a handshake READY timeout in
+  `DiscordRpcClient.connect()` and a connect timeout in `DiscordIpcTransport` (a
+  stalled handshake currently hangs `start()` forever); cap re-auth attempts →
+  fall back to mock instead of looping on an empty channel; map RPC `ERROR` frames to
+  accurate codes (not a blanket `DISCORD_AUTH_FAILED`); validate the granted scopes on
+  `AUTHENTICATE`.
+- [ ] **Verify Discord live + reconcile docs** *(voice-discord, docs)* — re-run the
+  full pipeline against a real Discord client and capture evidence; resolve the
+  contradiction between README/roadmap ("verified live") and `docs/discord-rpc.md §11`
+  ("pending"). Verification so far was a one-off manual test with no repeatable
+  artifact.
+- [ ] **OpenDeck on real hardware** *(adapters)* — verify the Variant-B path
+  end-to-end on a real OpenDeck host + device (AKP05 PRO): launch handshake,
+  `willAppear` coordinates/controllers, `setImage(data:image/png)`, key round-trip.
+- [ ] **Ship a runnable relay** *(adapters)* — `relay.mjs` needs Node ≥22 on `PATH`
+  with no shipped runtime or per-OS `CodePath`; package a runtime/launcher so the
+  plugin starts on a clean machine.
+- [ ] **Relay reconnect hygiene** *(adapters)* — subscribe `OpenDeckAdapter` to
+  `transport.onClose()` and clear devices/contexts/keypad order (and orphaned key
+  images on deck shrink) so a relay drop / Deckord restart doesn't leave stale
+  contexts and stale participant images.
+- [ ] **Stand up CI** *(tests-ci)* — a workflow running test + typecheck + test:types
+  + lint + format:check + build on push/PR; no `.github`, hooks, or lint-staged exist.
+- [ ] **Fix `format:check`** *(tests-ci)* — currently red on 56 files; run
+  `pnpm format`, commit, keep the gate green.
+- [ ] **Integration/e2e tests** *(tests-ci, ipc-ws, config-secrets)* — WsServer (token
+  accept/reject, Origin, routing, lifecycle), Discord transport/RPC-client/provider via
+  an in-memory fake socket, VoiceService/DeckordService/ServiceRunner restart-to-apply,
+  `SafeStorageSecretStore` + Diagnostics redaction.
+- [ ] **First-run onboarding + Connect error UX** *(desktop)* — a guided first launch
+  (enter creds → Connect → done) instead of a bare settings screen; surface actionable
+  Connect failure reasons (not-a-tester, Discord-not-running, no-voice-channel,
+  bad-secret) instead of a silent fallback-to-mock.
+- [ ] **Code signing & notarization** *(desktop)* — Windows Authenticode + macOS
+  notarization so installers aren't SmartScreen/Gatekeeper flagged.
+- [ ] **Packaged logging + crash capture** *(desktop)* — persistent file logging and
+  crash handlers in the shell; use the Electron `userData` dir instead of `~/.deckord`.
+- [ ] **Physical-deck avatar repaint** *(rendering)* — re-render a slot when its async
+  avatar download finishes, or physical-deck buttons stay on the identicon forever.
+- [ ] **Prune the selection set on departure** *(deck-core)* — a departed user's
+  selection currently resurrects on rejoin; drop it from `SlotManager.selected` when a
+  user leaves.
+
+### P2 — nice-to-have / hardening
+
+- [ ] **Atomic config/secret writes** *(config-secrets)* — temp-file + rename (+ fsync)
+  so a mid-write crash can't corrupt `secrets.json`/`settings.json` (a corrupt file
+  currently silently resets, losing the client secret + token).
+- [ ] **Pasted-token staleness** *(config-secrets)* — a pasted access token has no
+  expiry/refresh and dies silently; warn or document. Allow clearing `clientId` /
+  `redirectUri` once persisted. Scrub the event ring / OAuth error bodies before export.
+- [ ] **WS hardening** *(ipc-ws)* — constant-time token compare, `maxPayload` +
+  connection cap (DoS), reject binary frames, negotiate `IPC_PROTOCOL_VERSION`.
+- [ ] **Import-boundary guardrail** *(architecture)* — a `no-restricted-imports` /
+  dependency-cruiser rule so deck-core/adapters can't regress the layering; decouple
+  `deck-adapter → ipc-contract` (make `DeckWire` generic); consider emitting compiled
+  JS / TS project references.
+- [ ] **Docs refresh** *(docs)* — README omits the shipped OpenDeck adapter, Electron
+  shell, and config UI (and 2 workspace members); `architecture.md` and
+  `docs/adapters/opendeck.md` carry stale "not implemented" banners; document the
+  OpenDeck env vars; `docs/security` is referenced by code but missing.
+- [ ] **Rendering cleanups** *(rendering)* — `disconnected` visual state is rendered
+  nowhere; three divergent identicon impls (dead `identiconDataUrl`); unbounded avatar
+  cache (no eviction); dead `avatarLocalPath` field; GIF avatars render single-frame.
+- [ ] **deck-core cleanups** *(deck-core)* — `nextPage()` pageCount uses raw vs
+  reconciled user count; non-integer `statusSlotIndex` produces a bad array key; fill
+  public-API test gaps.
+- [ ] **Adapter polish** *(adapters)* — real plugin icons + a Property Inspector;
+  `OpenDeckFactory.isSupported()` shouldn't always return `true`; handle
+  encoder/touchscreen/dial events (currently reported-but-unusable).
+- [ ] **Cross-platform + versioning** *(release)* — verify or de-scope macOS/Linux;
+  add a `CHANGELOG`, real version tags, and an auto-update channel.
