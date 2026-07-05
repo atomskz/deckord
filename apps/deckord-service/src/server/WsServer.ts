@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import {
   decodeClientMessage,
@@ -8,10 +10,13 @@ import {
   type ServiceToClientMessage,
 } from '@deckord/ipc-contract';
 import type { DeckWire } from '@deckord/deck-adapter';
-import type { DeckButtonEventKind, Logger } from '@deckord/shared';
+import { DeckordError, type DeckButtonEventKind, type Logger } from '@deckord/shared';
 
 export type WsClient = {
   id: number;
+  /** True when the client presented the configured shared token. When no token is
+   * configured (open dev mode) this is false and the API is unauthenticated. */
+  authenticated: boolean;
   send: (message: ServiceToClientMessage) => void;
 };
 
@@ -22,6 +27,7 @@ export type WsServerConfig = {
   token?: string;
 };
 
+type ClientRecord = { ws: WebSocket; authenticated: boolean };
 type ButtonHandler = (event: { kind: DeckButtonEventKind; slotIndex: number }) => void;
 type MockHandler = (command: MockCommand, userId?: string) => void;
 type ConnectHandler = (client: WsClient) => void;
@@ -29,13 +35,14 @@ type ConfigHandler = (message: ConfigClientMessage, client: WsClient) => void;
 type DiagnosticsHandler = (client: WsClient) => void;
 
 /**
- * Local WebSocket transport. Binds to loopback only, optionally gated by a shared
- * token. Implements the adapter's `DeckWire` (broadcast + button events) and also
- * surfaces client connect + mock commands to the orchestrator.
+ * Local WebSocket transport. Binds to loopback and fails closed if asked to bind a
+ * non-loopback host without a token. Every connection is Origin-checked (so a
+ * drive-by web page can't reach the API) and, when a token is configured, gated by
+ * a constant-time token comparison. Implements the adapter's `DeckWire`.
  */
 export class WsServer implements DeckWire {
   private wss: WebSocketServer | null = null;
-  private readonly clients = new Map<number, WebSocket>();
+  private readonly clients = new Map<number, ClientRecord>();
   private nextId = 1;
 
   private readonly buttonHandlers: ButtonHandler[] = [];
@@ -51,17 +58,31 @@ export class WsServer implements DeckWire {
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Fail closed: never expose an unauthenticated API beyond loopback.
+      if (!isLoopbackHost(this.config.host) && !this.config.token) {
+        reject(
+          new DeckordError(
+            'CONFIG_INVALID',
+            `Refusing to bind the WebSocket API to non-loopback host "${this.config.host}" without DECKORD_WS_TOKEN`,
+          ),
+        );
+        return;
+      }
       const wss = new WebSocketServer({
         host: this.config.host,
         port: this.config.port,
         path: this.config.path,
+        // Reject bad origins / missing tokens during the HTTP upgrade (401), so an
+        // unauthorized client never completes the handshake or sees an open socket.
+        verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) =>
+          this.verifyClient(info.origin, info.req),
       });
-      wss.on('connection', (ws, req) => this.handleConnection(ws, req.url ?? ''));
+      wss.on('connection', (ws, req) => this.handleConnection(ws, req));
       wss.once('listening', () => {
         this.wss = wss;
         if (!this.config.token) {
           this.log.warn(
-            'WebSocket API has NO token (debug-only). Set DECKORD_WS_TOKEN before exposing beyond localhost.',
+            'WebSocket API has NO token (open dev mode). The desktop shell sets a per-install token automatically.',
           );
         }
         this.log.info(
@@ -75,7 +96,7 @@ export class WsServer implements DeckWire {
 
   broadcast(message: ServiceToClientMessage): void {
     const raw = encode(message);
-    for (const ws of this.clients.values()) {
+    for (const { ws } of this.clients.values()) {
       if (ws.readyState === WebSocket.OPEN) ws.send(raw);
     }
   }
@@ -106,8 +127,14 @@ export class WsServer implements DeckWire {
     return this.clients.size;
   }
 
+  /** The actually-bound port (useful when configured with port 0 in tests). */
+  get boundPort(): number {
+    const addr = this.wss?.address();
+    return addr && typeof addr === 'object' ? addr.port : this.config.port;
+  }
+
   async close(): Promise<void> {
-    for (const ws of this.clients.values()) ws.close();
+    for (const { ws } of this.clients.values()) ws.close();
     this.clients.clear();
     await new Promise<void>((resolve) => {
       if (!this.wss) return resolve();
@@ -117,16 +144,25 @@ export class WsServer implements DeckWire {
 
   // --- internal ------------------------------------------------------------
 
-  private handleConnection(ws: WebSocket, url: string): void {
-    if (!this.authorize(url)) {
-      this.log.warn('Rejected WebSocket connection: invalid or missing token');
-      ws.close(1008, 'unauthorized');
-      return;
+  /** Upgrade-time gate: origin allowlist + token (before the handshake completes). */
+  private verifyClient(origin: string | undefined, req: IncomingMessage): boolean {
+    if (!originAllowed(origin)) {
+      this.log.warn(`Rejected WebSocket upgrade: forbidden origin ${origin ?? '(none)'}`);
+      return false;
     }
+    if (!this.authorize(req.url ?? '').accept) {
+      this.log.warn('Rejected WebSocket upgrade: invalid or missing token');
+      return false;
+    }
+    return true;
+  }
 
+  private handleConnection(ws: WebSocket, req: IncomingMessage): void {
+    // Already authorized by verifyClient; recompute the authenticated flag.
+    const authenticated = this.authorize(req.url ?? '').authenticated;
     const id = this.nextId++;
-    this.clients.set(id, ws);
-    this.log.info(`Debug deck connected (client #${id}), ${this.clients.size} total`);
+    this.clients.set(id, { ws, authenticated });
+    this.log.info(`Client connected (#${id}${authenticated ? ', authenticated' : ''}), ${this.clients.size} total`);
 
     // Send a snapshot synchronously on accept so it precedes any broadcast
     // (the mock speaking timer may fire before the client's `hello` arrives).
@@ -135,18 +171,19 @@ export class WsServer implements DeckWire {
     ws.on('message', (data) => this.handleMessage(id, data));
     ws.on('close', () => {
       this.clients.delete(id);
-      this.log.info(`Debug deck disconnected (client #${id})`);
+      this.log.info(`Client disconnected (#${id})`);
     });
     ws.on('error', (err) => this.log.warn(`Client #${id} socket error: ${err.message}`));
   }
 
-  private authorize(url: string): boolean {
-    if (!this.config.token) return true;
+  private authorize(url: string): { accept: boolean; authenticated: boolean } {
+    if (!this.config.token) return { accept: true, authenticated: false };
     try {
       const parsed = new URL(url, 'http://127.0.0.1');
-      return parsed.searchParams.get('token') === this.config.token;
+      const ok = tokensMatch(parsed.searchParams.get('token') ?? '', this.config.token);
+      return { accept: ok, authenticated: ok };
     } catch {
-      return false;
+      return { accept: false, authenticated: false };
     }
   }
 
@@ -201,13 +238,43 @@ export class WsServer implements DeckWire {
   }
 
   private makeClient(clientId: number): WsClient | null {
-    const ws = this.clients.get(clientId);
-    if (!ws) return null;
+    const record = this.clients.get(clientId);
+    if (!record) return null;
     return {
       id: clientId,
+      authenticated: record.authenticated,
       send: (message) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(encode(message));
+        if (record.ws.readyState === WebSocket.OPEN) record.ws.send(encode(message));
       },
     };
   }
+}
+
+/** 127.0.0.1 / ::1 / localhost — NOT 0.0.0.0 (which binds every interface). */
+function isLoopbackHost(host: string): boolean {
+  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
+}
+
+/**
+ * Allow non-browser clients (no Origin: the relay, native clients), Electron
+ * (file://), and loopback web origins; reject everything else so a random web
+ * page can't reach the API from a user's browser (CSWSH).
+ */
+function originAllowed(origin: string | undefined): boolean {
+  if (!origin || origin === 'null') return true;
+  try {
+    const u = new URL(origin);
+    if (u.protocol === 'file:') return true;
+    return isLoopbackHost(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Constant-time token comparison (avoids leaking length/prefix via timing). */
+function tokensMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

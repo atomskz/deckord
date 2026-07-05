@@ -11,7 +11,7 @@ import { mergeSettings, settingsFromConfig, type SettingsStore } from './setting
 import { SECRET_KEYS, SecretStoreTokenStore, type SecretStore } from '../secrets/SecretStore';
 
 type ConfigMessage = Extract<ServiceToClientMessage, { type: 'config' }>;
-type Client = { send: (message: ServiceToClientMessage) => void };
+type Client = { authenticated: boolean; send: (message: ServiceToClientMessage) => void };
 
 export type ConfigControllerDeps = {
   /** The config the running service actually loaded (for reporting current state). */
@@ -49,7 +49,8 @@ export class ConfigController {
           client.send(await this.buildConfigMessage());
           break;
         case 'set_config':
-          await this.applySet(message.payload);
+          // Returns false when the write was refused (unauthenticated credential write).
+          if (!(await this.applySet(message.payload, client))) break;
           // Broadcast so every connected UI reflects the saved (pending) state.
           this.deps.broadcast(await this.buildConfigMessage());
           break;
@@ -79,8 +80,30 @@ export class ConfigController {
     client.send(await this.buildConfigMessage());
   }
 
-  private async applySet(payload: SetConfigPayload): Promise<void> {
+  /** Returns true if the write was applied, false if it was refused. */
+  private async applySet(payload: SetConfigPayload, client: Client): Promise<boolean> {
     let changed = false;
+
+    // Credential writes require an authenticated connection whenever the API is
+    // token-gated (the shipped desktop always sets a token). Unauthenticated
+    // clients can only exist in open dev mode, where this is intentionally allowed.
+    const writesSecrets = Boolean(
+      payload.secrets &&
+        (payload.secrets.clientSecret !== undefined ||
+          payload.secrets.accessToken !== undefined ||
+          payload.secrets.clearToken),
+    );
+    if (writesSecrets && Boolean(this.deps.config.ws.token) && !client.authenticated) {
+      this.deps.broadcast({
+        type: 'status',
+        payload: {
+          level: 'error',
+          message: 'Authentication required to change Discord credentials.',
+          code: 'CONFIG_INVALID',
+        },
+      });
+      return false;
+    }
 
     const incoming = payload.settings ? this.stripMaskedWsToken(payload.settings) : undefined;
     if (incoming && Object.keys(incoming).length > 0) {
@@ -115,6 +138,7 @@ export class ConfigController {
     }
 
     if (changed) this.pendingRestart = true;
+    return true;
   }
 
   /** The WS shared token is a secret; never round-trip its real value to the UI. */

@@ -80,10 +80,14 @@ export class DeckSocket {
   }
 }
 
-/** Build the WS URL from Vite env (optional token) with a loopback default. */
+/** Build the WS URL with an optional shared token, defaulting to loopback. */
 export function resolveWsUrl(): string {
   const base = import.meta.env.VITE_WS_URL ?? 'ws://127.0.0.1:8787/deck';
-  const token = import.meta.env.VITE_WS_TOKEN;
+  // The desktop shell injects a per-install token via the page URL (?token=…);
+  // dev can bake one in with VITE_WS_TOKEN.
+  const fromUrl =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null;
+  const token = fromUrl ?? import.meta.env.VITE_WS_TOKEN;
   if (!token) return base;
   const url = new URL(base);
   url.searchParams.set('token', token);

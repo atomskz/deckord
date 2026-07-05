@@ -27,6 +27,8 @@ export const SECRET_KEYS = {
   clientSecret: 'discord.clientSecret',
   /** The persisted OAuth token (StoredToken JSON). */
   token: 'discord.token',
+  /** Per-install token that gates the local WebSocket API (set by the desktop shell). */
+  wsApiToken: 'ws.apiToken',
 } as const;
 
 /** Default location of the secrets file within the data dir. */

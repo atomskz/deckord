@@ -502,12 +502,12 @@ token merge-on-paste, `LogLevel` drift guard, Electron before-quit + lazy re-enc
   `icon.ico`/`icon.icns`, create the `assets/` dir referenced by `buildResources`,
   then actually run `electron-builder` and smoke-run the installer on a clean Windows
   host (install → tray → window → mock mode). The packaging pipeline has never run.
-- [ ] **Authenticate the loopback WS by default** *(security-privacy, ipc-ws)* —
-  auto-generate a per-install `DECKORD_WS_TOKEN` when unset, have the desktop shell
-  inject it into the bundled UI, refuse `set_config` credential writes on
-  unauthenticated connections, add an `Origin` allowlist, and constrain
-  `DECKORD_WS_HOST` to loopback. Today any local process can read/write Discord creds
-  via `set_config` on the ungated `127.0.0.1:8787`.
+- [x] **Authenticate the loopback WS by default** *(security-privacy, ipc-ws)* — the
+  desktop shell auto-generates a per-install token, feeds it to the service (env) and
+  injects it into the UI via the page URL (`?token=…`); the WS gates the upgrade with
+  an `Origin` allowlist + constant-time token check (401 before handshake), fails
+  closed on a non-loopback bind without a token, and `ConfigController` refuses
+  credential writes from unauthenticated clients. Covered by new `WsServer` tests. ✅
 - [ ] **Discord distribution model** *(release)* — either obtain Discord approval for
   the public app, or explicitly scope v1 as bring-your-own/power-user. The mainstream
   install-and-use path does not exist yet.

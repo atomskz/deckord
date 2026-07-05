@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { app, BrowserWindow, Menu, Tray, nativeImage } from 'electron';
 import {
@@ -5,10 +6,12 @@ import {
   FileSettingsStore,
   loadConfig,
   mergeConfig,
+  SECRET_KEYS,
   secretsPath,
   ServiceRunner,
   settingsPath,
   type Logger,
+  type SecretStore,
 } from 'deckord-service';
 import { SafeStorageSecretStore } from './SafeStorageSecretStore';
 
@@ -28,6 +31,7 @@ let tray: Tray | null = null;
 let win: BrowserWindow | null = null;
 let runner: ServiceRunner | null = null;
 let log: Logger | null = null;
+let wsToken = '';
 let quitting = false;
 let stopping = false;
 
@@ -57,11 +61,25 @@ async function main(): Promise<void> {
   const secrets = new SafeStorageSecretStore(secretsPath(base.dataDir));
   log = configureLogging(mergeConfig(base, await settings.load()).logLevel);
 
+  // Authenticate the loopback API by default: a per-install token gates the WS so
+  // no other local process can read/write Discord credentials. It's injected into
+  // the service (via env, picked up by loadConfig) and into the UI (via the page URL).
+  wsToken = await ensureWsToken(secrets);
+  process.env.DECKORD_WS_TOKEN = wsToken;
+
   runner = new ServiceRunner(log, settings, secrets);
   await runner.start();
 
   createTray();
   createWindow();
+}
+
+async function ensureWsToken(secrets: SecretStore): Promise<string> {
+  const existing = await secrets.get(SECRET_KEYS.wsApiToken);
+  if (existing) return existing;
+  const token = randomBytes(24).toString('hex');
+  await secrets.set(SECRET_KEYS.wsApiToken, token);
+  return token;
 }
 
 function createWindow(): void {
@@ -74,7 +92,10 @@ function createWindow(): void {
     webPreferences: { contextIsolation: true },
   });
   // The built debug-deck UI is copied to <appRoot>/renderer by the build step.
-  void win.loadFile(path.join(app.getAppPath(), 'renderer', 'index.html'));
+  // Inject the per-install WS token so the UI can authenticate to the local API.
+  void win.loadFile(path.join(app.getAppPath(), 'renderer', 'index.html'), {
+    search: `token=${encodeURIComponent(wsToken)}`,
+  });
   win.once('ready-to-show', () => win?.show());
   win.on('close', (event) => {
     // Hide to tray instead of quitting, unless the user chose Quit.

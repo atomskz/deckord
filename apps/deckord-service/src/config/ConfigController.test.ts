@@ -8,14 +8,16 @@ import { ConfigController } from './ConfigController';
 
 setLogLevel('error' as LogLevel);
 
-function harness() {
+function harness(opts: { token?: string; authenticated?: boolean } = {}) {
   const settings = new MemorySettingsStore();
   const secrets = new MemorySecretStore();
   const broadcasts: ServiceToClientMessage[] = [];
   const sent: ServiceToClientMessage[] = [];
   const restart = vi.fn(async () => {});
+  const env: NodeJS.ProcessEnv = { DECKORD_DATA_DIR: '/tmp/deckord-cfg-test' };
+  if (opts.token) env.DECKORD_WS_TOKEN = opts.token;
   const controller = new ConfigController({
-    config: loadConfig({ DECKORD_DATA_DIR: '/tmp/deckord-cfg-test' }),
+    config: loadConfig(env),
     settings,
     secrets,
     broadcast: (m) => broadcasts.push(m),
@@ -23,7 +25,7 @@ function harness() {
     restart,
     log: createLogger('test'),
   });
-  const client = { send: (m: ServiceToClientMessage) => sent.push(m) };
+  const client = { authenticated: opts.authenticated ?? true, send: (m: ServiceToClientMessage) => sent.push(m) };
   const handle = (m: ConfigClientMessage) => controller.handle(m, client);
   return { controller, settings, secrets, broadcasts, sent, restart, client, handle };
 }
@@ -88,6 +90,21 @@ describe('ConfigController', () => {
     expect(await h.secrets.has(SECRET_KEYS.token)).toBe(true);
     await h.handle({ type: 'set_config', payload: { secrets: { clearToken: true } } });
     expect(await h.secrets.has(SECRET_KEYS.token)).toBe(false);
+  });
+
+  it('refuses a credential write from an unauthenticated client when a token is set', async () => {
+    const h = harness({ token: 'api-token', authenticated: false });
+    await h.handle({ type: 'set_config', payload: { secrets: { clientSecret: 'sneaky' } } });
+    // Nothing stored; an error status is broadcast; no config broadcast.
+    expect(await h.secrets.get(SECRET_KEYS.clientSecret)).toBeNull();
+    expect(h.broadcasts.some((m) => m.type === 'status' && m.payload.code === 'CONFIG_INVALID')).toBe(true);
+    expect(h.broadcasts.some((m) => m.type === 'config')).toBe(false);
+  });
+
+  it('allows a credential write from an authenticated client', async () => {
+    const h = harness({ token: 'api-token', authenticated: true });
+    await h.handle({ type: 'set_config', payload: { secrets: { clientSecret: 'ok' } } });
+    expect(await h.secrets.get(SECRET_KEYS.clientSecret)).toBe('ok');
   });
 
   it('connect_discord persists the provider and restarts', async () => {
