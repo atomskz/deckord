@@ -510,9 +510,11 @@ token merge-on-paste, `LogLevel` drift guard, Electron before-quit + lazy re-enc
   an `Origin` allowlist + constant-time token check (401 before handshake), fails
   closed on a non-loopback bind without a token, and `ConfigController` refuses
   credential writes from unauthenticated clients. Covered by new `WsServer` tests. ✅
-- [ ] **Discord distribution model** *(release)* — either obtain Discord approval for
-  the public app, or explicitly scope v1 as bring-your-own/power-user. The mainstream
-  install-and-use path does not exist yet.
+- [x] **Discord distribution model** *(release)* — **decided: v1 ships as
+  bring-your-own** (the `rpc` scope is whitelist-only, so public approval can't gate
+  v1). Messaged in the README ("Distribution model (v1)"), `docs/distribution.md`, and
+  the Settings UI, with step-by-step app-registration instructions. Public-app
+  approval is tracked as a post-v1 milestone (see Discord distribution above). ✅
 
 ### P1 — strongly wanted before shipping
 

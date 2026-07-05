@@ -20,6 +20,29 @@ rendering labels and badges — is device-agnostic.
 
 ---
 
+## Distribution model (v1): bring your own Discord app
+
+Deckord talks to Discord over the **local RPC** interface, which requires an OAuth
+`rpc` scope that Discord only grants to **whitelisted** applications. Rather than
+block v1 on that approval, **v1 ships as bring-your-own**: each user registers their
+own Discord application (free, a few clicks) and enters its `client_id` /
+`client_secret` in Deckord's **Settings**. Credentials stay on your machine (the
+secret is stored in the OS keychain by the desktop app) and drive the built-in
+interactive `AUTHORIZE` flow.
+
+1. Create an app at <https://discord.com/developers/applications> → **New Application**.
+2. Under **OAuth2**, copy the **Client ID** and **Client Secret**; add
+   `http://127.0.0.1/callback` as a redirect.
+3. Add yourself under **App Testers** (the `rpc` scope is whitelist-only).
+4. Paste the Client ID + Secret into Deckord → **Settings → Discord application** →
+   **Connect Discord**, and approve the one-time prompt in your Discord client.
+
+Obtaining approval for a **public** Deckord application (so most users skip steps 1–3)
+is a post-v1 milestone; bring-your-own remains the power-user / fallback path. See
+[docs/distribution.md](docs/distribution.md) for the full model.
+
+---
+
 ## Why a debug deck exists
 
 A physical macro deck is slow to iterate against: you need the hardware, a device
