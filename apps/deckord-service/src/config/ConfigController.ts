@@ -82,8 +82,9 @@ export class ConfigController {
   private async applySet(payload: SetConfigPayload): Promise<void> {
     let changed = false;
 
-    if (payload.settings && Object.keys(payload.settings).length > 0) {
-      await this.deps.settings.patch(payload.settings);
+    const incoming = payload.settings ? this.stripMaskedWsToken(payload.settings) : undefined;
+    if (incoming && Object.keys(incoming).length > 0) {
+      await this.deps.settings.patch(incoming);
       changed = true;
     }
 
@@ -100,10 +101,14 @@ export class ConfigController {
         changed = true;
       }
       if (s.accessToken !== undefined && s.accessToken !== '') {
-        // A pasted access token is stored as a StoredToken so the auth flow uses it.
-        await new SecretStoreTokenStore(this.deps.secrets).save({
+        // A pasted access token replaces only the access token, preserving any
+        // existing refresh token / scopes / expiry rather than wiping them.
+        const store = new SecretStoreTokenStore(this.deps.secrets);
+        const existing = await store.load();
+        await store.save({
+          ...existing,
           accessToken: s.accessToken,
-          scopes: [...MVP_SCOPES],
+          scopes: existing?.scopes ?? [...MVP_SCOPES],
         });
         changed = true;
       }
@@ -112,6 +117,9 @@ export class ConfigController {
     if (changed) this.pendingRestart = true;
   }
 
+  /** The WS shared token is a secret; never round-trip its real value to the UI. */
+  private static readonly WS_TOKEN_MASK = '***';
+
   private async buildConfigMessage(): Promise<ConfigMessage> {
     // Show the persisted (possibly pending) settings so the UI reflects saved edits
     // immediately, even before a restart applies them to the running pipeline.
@@ -119,12 +127,16 @@ export class ConfigController {
       settingsFromConfig(this.deps.config),
       await this.deps.settings.load(),
     );
+    // Never send the WS shared token's real value to the UI (matches diagnostics).
+    if (effective.ws?.token) {
+      effective.ws = { ...effective.ws, token: ConfigController.WS_TOKEN_MASK };
+    }
     const payload: ConfigPayload = {
       settings: effective,
       secrets: {
-        hasClientSecret:
-          Boolean(this.deps.config.discord.clientSecret) ||
-          (await this.deps.secrets.has(SECRET_KEYS.clientSecret)),
+        // Presence is reported from the live secret store only, so clearing a
+        // secret is reflected immediately (not stuck true until a restart).
+        hasClientSecret: await this.deps.secrets.has(SECRET_KEYS.clientSecret),
         hasToken: await this.deps.secrets.has(SECRET_KEYS.token),
       },
       runtime: {
@@ -134,5 +146,12 @@ export class ConfigController {
       },
     };
     return { type: 'config', payload };
+  }
+
+  /** Drop a masked WS token from an incoming settings patch so it never persists. */
+  private stripMaskedWsToken(settings: SetConfigPayload['settings']): SetConfigPayload['settings'] {
+    if (settings?.ws?.token !== ConfigController.WS_TOKEN_MASK) return settings;
+    const { token: _masked, ...ws } = settings.ws;
+    return { ...settings, ws };
   }
 }

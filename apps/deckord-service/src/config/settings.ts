@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DeckordSettingsSchema, type DeckordSettings } from '@deckord/ipc-contract';
 import type { DeckordConfig } from './index';
@@ -42,8 +42,10 @@ export class FileSettingsStore implements SettingsStore {
 
   async save(settings: DeckordSettings): Promise<void> {
     const clean = DeckordSettingsSchema.parse(settings);
-    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
     await writeFile(this.filePath, `${JSON.stringify(clean, null, 2)}\n`, { mode: 0o600 });
+    // `mode` above only applies when the file is created; enforce it on rewrites too.
+    if (process.platform !== 'win32') await chmod(this.filePath, 0o600);
   }
 
   async patch(partial: DeckordSettings): Promise<DeckordSettings> {

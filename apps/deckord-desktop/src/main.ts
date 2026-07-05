@@ -29,12 +29,22 @@ let win: BrowserWindow | null = null;
 let runner: ServiceRunner | null = null;
 let log: Logger | null = null;
 let quitting = false;
+let stopping = false;
 
 // Single instance: a second launch just focuses the running window.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => showWindow());
+  // Registered synchronously (not after start()) so a quit during startup still
+  // shuts the service down, and the shutdown is actually awaited.
+  app.on('before-quit', (event) => {
+    quitting = true;
+    if (stopping || !runner) return;
+    stopping = true;
+    event.preventDefault();
+    void runner.stop().finally(() => app.quit());
+  });
   app.whenReady().then(main).catch((error) => {
     console.error('[deckord-desktop] failed to start:', error);
     app.quit();
@@ -52,11 +62,6 @@ async function main(): Promise<void> {
 
   createTray();
   createWindow();
-
-  app.on('before-quit', () => {
-    quitting = true;
-    void runner?.stop();
-  });
 }
 
 function createWindow(): void {

@@ -23,7 +23,12 @@ export class SafeStorageSecretStore implements SecretStore {
   async get(key: string): Promise<string | null> {
     const entry = (await this.read())[key];
     if (!entry) return null;
-    if (!entry.enc) return entry.value;
+    if (!entry.enc) {
+      // Lazily upgrade a plaintext fallback to encrypted once a keyring becomes
+      // available (e.g. a Linux session that gained a secret service).
+      if (safeStorage.isEncryptionAvailable()) await this.set(key, entry.value);
+      return entry.value;
+    }
     try {
       return safeStorage.decryptString(Buffer.from(entry.value, 'base64'));
     } catch {

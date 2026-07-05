@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type {
   DeckLayout,
   DeckSlot,
+  LogLevel,
   VoiceChannelState,
   VoiceUser,
 } from '@deckord/shared';
@@ -283,3 +284,4 @@ type _CheckVoiceUser = Expect<BiExtends<z.infer<typeof VoiceUserSchema>, VoiceUs
 type _CheckVoiceState = Expect<BiExtends<z.infer<typeof VoiceChannelStateSchema>, VoiceChannelState>>;
 type _CheckDeckSlot = Expect<BiExtends<z.infer<typeof DeckSlotSchema>, DeckSlot>>;
 type _CheckDeckLayout = Expect<BiExtends<z.infer<typeof DeckLayoutSchema>, DeckLayout>>;
+type _CheckLogLevel = Expect<BiExtends<z.infer<typeof LogLevelSchema>, LogLevel>>;

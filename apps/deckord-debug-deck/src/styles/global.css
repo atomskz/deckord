@@ -463,6 +463,13 @@ body {
   outline: none;
   border-color: var(--selected);
 }
+.settings-group input.invalid {
+  border-color: var(--muted);
+}
+.field-error {
+  color: var(--muted);
+  font-size: 11px;
+}
 .settings-checkbox {
   flex-direction: row !important;
   align-items: center;

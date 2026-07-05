@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { StoredToken, TokenStore } from '@deckord/discord-rpc';
 import type { DeckordConfig } from '../config/index';
@@ -76,8 +76,10 @@ export class FileSecretStore implements SecretStore {
 
   private async write(map: Record<string, string>): Promise<void> {
     this.cache = map;
-    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
     await writeFile(this.filePath, `${JSON.stringify(map, null, 2)}\n`, { mode: 0o600 });
+    // `mode` above only applies when the file is created; enforce it on rewrites too.
+    if (process.platform !== 'win32') await chmod(this.filePath, 0o600);
   }
 }
 

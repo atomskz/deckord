@@ -64,6 +64,17 @@ describe('ConfigController', () => {
     expect(JSON.stringify(payload)).not.toContain('top-secret');
   });
 
+  it('never sends the WS shared token value back to the UI (redacts to ***)', async () => {
+    const h = harness();
+    await h.handle({ type: 'set_config', payload: { settings: { ws: { token: 'super-secret-ws' } } } });
+    const payload = configOf(h.broadcasts);
+    expect(payload.settings.ws?.token).toBe('***');
+    expect(JSON.stringify(payload)).not.toContain('super-secret-ws');
+    // A masked token echoed back on save must not overwrite the stored real token.
+    await h.handle({ type: 'set_config', payload: { settings: { ws: { token: '***' } } } });
+    expect((await h.settings.load()).ws?.token).toBe('super-secret-ws');
+  });
+
   it('an empty client secret clears it', async () => {
     const h = harness();
     await h.secrets.set(SECRET_KEYS.clientSecret, 'old');

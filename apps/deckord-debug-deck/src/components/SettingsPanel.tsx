@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   ClientToServiceMessage,
   ConfigPayload,
@@ -31,6 +31,23 @@ type FormState = {
   mockSpeakingMs: string;
 };
 
+const WS_TOKEN_MASK = '***';
+
+/** Integer-range specs for the numeric fields (mirror DeckordSettingsSchema). */
+const NUM_SPECS = {
+  wsPort: { min: 1, max: 65535 },
+  openDeckPort: { min: 1, max: 65535 },
+  mockUsers: { min: 0, max: 64 },
+  mockSpeakingMs: { min: 100, max: 60_000 },
+} as const;
+type NumKey = keyof typeof NUM_SPECS;
+
+function numInvalid(value: string, spec: { min: number; max: number }): boolean {
+  if (value.trim() === '') return false; // empty = keep the default
+  const n = Number(value);
+  return !Number.isInteger(n) || n < spec.min || n > spec.max;
+}
+
 function fromConfig(payload: ConfigPayload): FormState {
   const s = payload.settings;
   return {
@@ -43,7 +60,8 @@ function fromConfig(payload: ConfigPayload): FormState {
     redirectUri: s.discord?.redirectUri ?? '',
     wsHost: s.ws?.host ?? '',
     wsPort: s.ws?.port != null ? String(s.ws.port) : '',
-    wsToken: s.ws?.token ?? '',
+    // The WS token is write-only: it arrives masked ('***'); never seed the field.
+    wsToken: '',
     openDeck: s.openDeck?.enabled ?? false,
     openDeckPort: s.openDeck?.port != null ? String(s.openDeck.port) : '',
     mockAutoStart: s.mock?.autoStart ?? true,
@@ -59,6 +77,12 @@ const numOrUndef = (value: string): number | undefined => {
 const strOrUndef = (value: string): string | undefined => (value.trim() !== '' ? value : undefined);
 
 function settingsFromForm(f: FormState): DeckordSettings {
+  const ws: NonNullable<DeckordSettings['ws']> = {
+    host: strOrUndef(f.wsHost),
+    port: numOrUndef(f.wsPort),
+  };
+  // Write-only: only send the WS token when the user typed one (blank = keep).
+  if (f.wsToken.trim() !== '') ws.token = f.wsToken;
   return {
     appName: strOrUndef(f.appName),
     logLevel: f.logLevel,
@@ -66,7 +90,7 @@ function settingsFromForm(f: FormState): DeckordSettings {
     // The OpenDeck toggle drives the active adapter as well as the relay endpoint.
     deckAdapter: f.openDeck ? 'opendeck' : 'debug-browser',
     discord: { clientId: f.clientId, redirectUri: strOrUndef(f.redirectUri) },
-    ws: { host: strOrUndef(f.wsHost), port: numOrUndef(f.wsPort), token: strOrUndef(f.wsToken) },
+    ws,
     openDeck: { enabled: f.openDeck, port: numOrUndef(f.openDeckPort) },
     mock: {
       autoStart: f.mockAutoStart,
@@ -76,8 +100,16 @@ function settingsFromForm(f: FormState): DeckordSettings {
   };
 }
 
+function secretsFromForm(f: FormState): { clientSecret?: string; accessToken?: string } | undefined {
+  const secrets: { clientSecret?: string; accessToken?: string } = {};
+  if (f.clientSecret) secrets.clientSecret = f.clientSecret;
+  if (f.accessToken) secrets.accessToken = f.accessToken;
+  return Object.keys(secrets).length ? secrets : undefined;
+}
+
 export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Ask for the current config on mount (the service also pushes it on connect).
   useEffect(() => {
@@ -92,16 +124,6 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
 
-  const secretsFromForm = useMemo(
-    () => (f: FormState) => {
-      const secrets: { clientSecret?: string; accessToken?: string } = {};
-      if (f.clientSecret) secrets.clientSecret = f.clientSecret;
-      if (f.accessToken) secrets.accessToken = f.accessToken;
-      return Object.keys(secrets).length ? secrets : undefined;
-    },
-    [],
-  );
-
   if (!config || !form) {
     return (
       <section className="settings">
@@ -110,19 +132,59 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
     );
   }
 
-  const save = () =>
-    send({ type: 'set_config', payload: { settings: settingsFromForm(form), secrets: secretsFromForm(form) } });
+  const invalid: Record<NumKey, boolean> = {
+    wsPort: numInvalid(form.wsPort, NUM_SPECS.wsPort),
+    openDeckPort: numInvalid(form.openDeckPort, NUM_SPECS.openDeckPort),
+    mockUsers: numInvalid(form.mockUsers, NUM_SPECS.mockUsers),
+    mockSpeakingMs: numInvalid(form.mockSpeakingMs, NUM_SPECS.mockSpeakingMs),
+  };
+  const anyInvalid = Object.values(invalid).some(Boolean);
+  const hasWsToken = config.settings.ws?.token === WS_TOKEN_MASK;
 
+  const save = () => {
+    if (anyInvalid) return;
+    send({ type: 'set_config', payload: { settings: settingsFromForm(form), secrets: secretsFromForm(form) } });
+  };
   const connect = () => {
+    if (anyInvalid) return;
     save();
     send({ type: 'connect_discord' });
   };
-
   const disconnect = () => send({ type: 'set_config', payload: { secrets: { clearToken: true } } });
   const clearSecret = () => {
     set('clientSecret', '');
     send({ type: 'set_config', payload: { secrets: { clientSecret: '' } } });
   };
+  const clearWsToken = () => {
+    set('wsToken', '');
+    send({ type: 'set_config', payload: { settings: { ws: { token: '' } } } });
+  };
+  const copyDiagnostics = () => {
+    if (!diagnostics) return;
+    Promise.resolve(navigator.clipboard?.writeText(JSON.stringify(diagnostics, null, 2)))
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
+  // Small helper for the numeric fields with inline validation.
+  const numberField = (label: string, key: NumKey & keyof FormState, placeholder: string) => (
+    <label>
+      {label}
+      <input
+        value={form[key] as string}
+        onChange={(e) => set(key, e.target.value as FormState[typeof key])}
+        placeholder={placeholder}
+        inputMode="numeric"
+        aria-invalid={invalid[key]}
+        className={invalid[key] ? 'invalid' : ''}
+      />
+      {invalid[key] && (
+        <span className="field-error">
+          must be an integer {NUM_SPECS[key].min}–{NUM_SPECS[key].max}
+        </span>
+      )}
+    </label>
+  );
 
   return (
     <section className="settings">
@@ -186,7 +248,7 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
           </label>
         </details>
         <div className="settings-actions">
-          <button type="button" className="control-button primary" onClick={connect}>
+          <button type="button" className="control-button primary" onClick={connect} disabled={anyInvalid}>
             Connect Discord
           </button>
           <button type="button" className="control-button" onClick={disconnect} disabled={!config.secrets.hasToken}>
@@ -229,14 +291,21 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
           Host
           <input value={form.wsHost} onChange={(e) => set('wsHost', e.target.value)} placeholder="127.0.0.1" />
         </label>
-        <label>
-          Port
-          <input value={form.wsPort} onChange={(e) => set('wsPort', e.target.value)} placeholder="8787" inputMode="numeric" />
-        </label>
+        {numberField('Port', 'wsPort', '8787')}
         <label>
           Token (shared secret)
-          <input value={form.wsToken} onChange={(e) => set('wsToken', e.target.value)} placeholder="none" />
+          <input
+            type="password"
+            value={form.wsToken}
+            onChange={(e) => set('wsToken', e.target.value)}
+            placeholder={hasWsToken ? '•••• set — leave blank to keep' : 'none (loopback)'}
+          />
         </label>
+        <div className="settings-actions">
+          <button type="button" className="control-button" onClick={clearWsToken} disabled={!hasWsToken}>
+            Clear WS token
+          </button>
+        </div>
         <p className="hint">Changing the host/port requires reconnecting this UI to the new endpoint.</p>
       </fieldset>
 
@@ -246,10 +315,7 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
           <input type="checkbox" checked={form.openDeck} onChange={(e) => set('openDeck', e.target.checked)} />
           Use the OpenDeck relay adapter (physical deck)
         </label>
-        <label>
-          Relay port
-          <input value={form.openDeckPort} onChange={(e) => set('openDeckPort', e.target.value)} placeholder="8788" inputMode="numeric" />
-        </label>
+        {numberField('Relay port', 'openDeckPort', '8788')}
       </fieldset>
 
       <fieldset className="settings-group">
@@ -258,14 +324,8 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
           <input type="checkbox" checked={form.mockAutoStart} onChange={(e) => set('mockAutoStart', e.target.checked)} />
           Auto-start the mock channel
         </label>
-        <label>
-          Initial users
-          <input value={form.mockUsers} onChange={(e) => set('mockUsers', e.target.value)} placeholder="5" inputMode="numeric" />
-        </label>
-        <label>
-          Speaking interval (ms)
-          <input value={form.mockSpeakingMs} onChange={(e) => set('mockSpeakingMs', e.target.value)} placeholder="1600" inputMode="numeric" />
-        </label>
+        {numberField('Initial users', 'mockUsers', '5')}
+        {numberField('Speaking interval (ms)', 'mockSpeakingMs', '1600')}
       </fieldset>
 
       <fieldset className="settings-group">
@@ -279,12 +339,8 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
             Generate diagnostics
           </button>
           {diagnostics && (
-            <button
-              type="button"
-              className="control-button"
-              onClick={() => void navigator.clipboard?.writeText(JSON.stringify(diagnostics, null, 2))}
-            >
-              Copy to clipboard
+            <button type="button" className="control-button" onClick={copyDiagnostics}>
+              {copied ? 'Copied ✓' : 'Copy to clipboard'}
             </button>
           )}
         </div>
@@ -294,7 +350,7 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
       </fieldset>
 
       <div className="settings-actions sticky">
-        <button type="button" className="control-button primary" onClick={save}>
+        <button type="button" className="control-button primary" onClick={save} disabled={anyInvalid}>
           Save settings
         </button>
         <button type="button" className="control-button" onClick={() => setForm(fromConfig(config))}>
@@ -303,6 +359,7 @@ export function SettingsPanel({ config, diagnostics, send, onClose }: Props) {
         <button type="button" className="control-button" onClick={() => send({ type: 'restart_service' })}>
           Restart service
         </button>
+        {anyInvalid && <span className="field-error">Fix the highlighted fields before saving.</span>}
       </div>
     </section>
   );
