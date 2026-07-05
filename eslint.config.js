@@ -14,6 +14,8 @@ export default tseslint.config(
       'plugins/**',
       // deckord-desktop build outputs (bundled main + copied UI); the src is linted.
       'apps/deckord-desktop/renderer/**',
+      // Standalone Node codegen tooling (run manually, not app code).
+      'apps/deckord-desktop/scripts/**',
     ],
   },
   js.configs.recommended,

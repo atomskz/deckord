@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Deckord desktop shell (Electron): runs the service in-process, tray + config window.",
+  "author": "atomskz",
   "main": "dist/main.cjs",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -16,7 +17,16 @@
     "dist": "pnpm run prepare:app && electron-builder"
   },
   "dependencies": {
-    "deckord-service": "workspace:*"
+    "@napi-rs/canvas": "^0.1.65",
+    "deckord-service": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "//optionalDependencies": "The @napi-rs/canvas native Skia binary ships as per-OS packages. Declaring them as direct optional deps makes electron-builder collect the one matching the build host (pnpm skips the others via os/cpu). Keep the range in sync with @napi-rs/canvas above.",
+  "optionalDependencies": {
+    "@napi-rs/canvas-darwin-arm64": "^0.1.65",
+    "@napi-rs/canvas-darwin-x64": "^0.1.65",
+    "@napi-rs/canvas-linux-x64-gnu": "^0.1.65",
+    "@napi-rs/canvas-win32-x64-msvc": "^0.1.65"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

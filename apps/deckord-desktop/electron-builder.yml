@@ -8,11 +8,19 @@ directories:
 
 # What goes into the packaged app. The service is bundled into dist/main.cjs by
 # esbuild (pnpm run compile); the UI is copied to ./renderer (pnpm run renderer).
+# electron-builder additionally collects the production `dependencies` node_modules
+# (@napi-rs/canvas + its platform binary, ws) automatically.
 files:
   - dist/**
   - renderer/**
   - assets/**
   - package.json
+
+# @napi-rs/canvas ships a native .node (Skia); it must live OUTSIDE the asar so it
+# can be dlopen'd at runtime (incl. the per-platform @napi-rs/canvas-* binary).
+asarUnpack:
+  - "**/node_modules/@napi-rs/canvas/**"
+  - "**/node_modules/@napi-rs/canvas-*/**"
 
 # Deckord starts hidden in the tray and stays resident.
 win:

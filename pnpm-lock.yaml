@@ -72,9 +72,15 @@ importers:
 
   apps/deckord-desktop:
     dependencies:
+      '@napi-rs/canvas':
+        specifier: ^0.1.65
+        version: 0.1.100
       deckord-service:
         specifier: workspace:*
         version: link:../deckord-service
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -94,6 +100,19 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+    optionalDependencies:
+      '@napi-rs/canvas-darwin-arm64':
+        specifier: ^0.1.65
+        version: 0.1.100
+      '@napi-rs/canvas-darwin-x64':
+        specifier: ^0.1.65
+        version: 0.1.100
+      '@napi-rs/canvas-linux-x64-gnu':
+        specifier: ^0.1.65
+        version: 0.1.100
+      '@napi-rs/canvas-win32-x64-msvc':
+        specifier: ^0.1.65
+        version: 0.1.100
 
   apps/deckord-service:
     dependencies:
