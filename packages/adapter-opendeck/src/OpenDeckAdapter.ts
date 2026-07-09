@@ -45,6 +45,7 @@ export class OpenDeckAdapter implements IDeckAdapter {
   private readonly downHandlers: DeckButtonHandler[] = [];
   private readonly upHandlers: DeckButtonHandler[] = [];
   private readonly capabilityHandlers: ((capabilities: DeckCapabilities) => void)[] = [];
+  private readonly repaintHandlers: (() => void)[] = [];
 
   constructor(
     private readonly transport: OpenDeckPluginTransport,
@@ -71,13 +72,17 @@ export class OpenDeckAdapter implements IDeckAdapter {
       this.contexts.set(a.context, { device: a.device, coordinates: a.coordinates, controller: a.controller });
       // Elgato/OpenDeck resets a key to the action's default icon whenever it
       // (re)appears — which also happens when the user edits the profile (adds any
-      // widget), re-firing willAppear for every visible key. If the slot order is
-      // unchanged that produces no capability change and thus no re-render, so the
-      // keys would stay stuck on the placeholder. Re-push the last image we sent for
-      // this context immediately so it survives a re-appearance.
+      // widget), re-firing willAppear for the visible keys. If the slot order is
+      // unchanged that produces no capability change, so without a nudge the keys
+      // stay stuck on the placeholder. Re-push the last image we sent for an instant,
+      // flicker-free restore (correct when the mapping is unchanged)...
       const cached = this.lastImage.get(a.context);
       if (cached) this.transport.setImage(a.context, cached);
       this.recompute();
+      // ...then ask the service to repaint from the authoritative current layout,
+      // which also corrects any key whose content actually changed (cache miss after
+      // a willDisappear, or a shifted slot→context mapping).
+      for (const handler of this.repaintHandlers) handler();
     });
     transport.onWillDisappear((context) => {
       this.contexts.delete(context);
@@ -116,6 +121,10 @@ export class OpenDeckAdapter implements IDeckAdapter {
 
   onCapabilitiesChanged(handler: (capabilities: DeckCapabilities) => void): void {
     this.capabilityHandlers.push(handler);
+  }
+
+  onRepaintNeeded(handler: () => void): void {
+    this.repaintHandlers.push(handler);
   }
 
   async setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void> {

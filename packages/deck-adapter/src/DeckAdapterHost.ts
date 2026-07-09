@@ -56,6 +56,18 @@ export class DeckAdapterHost {
     });
   }
 
+  /**
+   * Drop the diff cache so the next `apply` repaints every slot, WITHOUT blanking
+   * the device first (unlike `reset`). Use when the device may have silently lost
+   * its key images (e.g. OpenDeck re-emits `willAppear` on a profile edit) and a
+   * clean repaint of the current content is wanted with no flash.
+   */
+  invalidate(): Promise<void> {
+    return this.enqueue(async () => {
+      this.previous.clear();
+    });
+  }
+
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
     // `.then(task, task)` runs `task` regardless of the previous result, and the
     // queue tail is kept always-resolved so one failed apply never blocks the next.

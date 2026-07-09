@@ -107,6 +107,10 @@ export class OpenDeckWsLink implements ElgatoLink {
       } catch {
         return;
       }
+      if (frame && typeof frame === 'object' && 'event' in frame) {
+        const f = frame as { event?: unknown; context?: unknown };
+        this.log.debug(`OpenDeck frame in: ${String(f.event)}${f.context ? ` ctx=${String(f.context)}` : ''}`);
+      }
       this.frameHandlers.forEach((h) => h(frame));
     });
     ws.on('close', () => {

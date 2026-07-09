@@ -30,6 +30,14 @@ export interface IDeckAdapter {
    */
   onCapabilitiesChanged(handler: (capabilities: DeckCapabilities) => void): void;
 
+  /**
+   * Register for "the device may have lost its key images, repaint from current
+   * state" — without a capability change. Host-driven decks (OpenDeck) fire this
+   * when the host re-emits `willAppear` on a profile edit and blanks the keys.
+   * Optional: static decks never need it.
+   */
+  onRepaintNeeded?(handler: () => void): void;
+
   setSlot(slotIndex: number, slot: RenderedDeckSlot): Promise<void>;
   clearSlot(slotIndex: number): Promise<void>;
   clearAll(): Promise<void>;

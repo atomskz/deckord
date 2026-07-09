@@ -106,6 +106,17 @@ describe('OpenDeckAdapter', () => {
     expect(rePushed[0]?.payload?.image).toBe(painted?.payload?.image);
   });
 
+  it('signals a repaint on every willAppear (even with unchanged slot order)', () => {
+    const { link, adapter } = setup();
+    link.feed(appear('a', 0, 0));
+    let repaints = 0;
+    adapter.onRepaintNeeded(() => repaints++);
+    // A re-emitted willAppear (profile edit) with the same context/order fires no
+    // capability change, but must still request an authoritative repaint.
+    link.feed(appear('a', 0, 0));
+    expect(repaints).toBe(1);
+  });
+
   it('does not re-push an image for a key it never painted', () => {
     const { link, adapter } = setup();
     link.feed(appear('a', 0, 0));

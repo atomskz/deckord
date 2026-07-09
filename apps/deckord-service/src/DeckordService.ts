@@ -65,6 +65,7 @@ export class DeckordService {
   private renderedLayout: DeckLayout | null = null;
   private reconfigureTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingCaps: DeckCapabilities | undefined;
+  private repaintTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Avatar bytes for a physical-deck rasterizer (OpenDeck): the cached local file. */
   private readonly resolveDeckAvatar = async (slot: RenderedDeckSlot): Promise<string | undefined> => {
@@ -143,6 +144,9 @@ export class DeckordService {
     this.slots = new SlotManager(slotConfigFromCapabilities(selection.adapter.getCapabilities()));
     this.setDeckInfo(selection.factory.id, selection.adapter.getCapabilities());
     selection.adapter.onCapabilitiesChanged((caps) => this.reconfigure(caps));
+    // Host-driven decks (OpenDeck) may blank keys without a capability change (the
+    // host re-emits willAppear on a profile edit); repaint from current state.
+    selection.adapter.onRepaintNeeded?.(() => this.requestRepaint());
 
     // Initialize a rendered layout so the first client to connect always gets a
     // valid snapshot, even before the provider has emitted any state.
@@ -185,6 +189,7 @@ export class DeckordService {
 
   async stop(): Promise<void> {
     if (this.reconfigureTimer) clearTimeout(this.reconfigureTimer);
+    if (this.repaintTimer) clearTimeout(this.repaintTimer);
     await this.voice.stop();
     await this.host?.stop();
     await this.openDeckLink?.stop();
@@ -197,6 +202,24 @@ export class DeckordService {
    * Debounced so a burst of willAppear/willDisappear while the user assigns keys
    * coalesces into a single rebuild + repaint instead of one per event.
    */
+  /**
+   * Repaint the deck from the authoritative current layout without rebuilding
+   * deck-core (so page/selection state survives). Debounced so a burst of
+   * willAppear frames while the user edits the profile coalesces into one repaint.
+   */
+  private requestRepaint(): void {
+    if (this.repaintTimer || this.reconfigureTimer) return; // a pending reconfigure already repaints
+    this.repaintTimer = setTimeout(() => {
+      this.repaintTimer = undefined;
+      const host = this.host;
+      if (!host) return;
+      void host
+        .invalidate()
+        .then(() => this.refreshDeck(this.voice.getState()))
+        .catch((error) => this.log.warn(`Deck repaint failed: ${String(error)}`));
+    }, 60);
+  }
+
   private reconfigure(caps: DeckCapabilities): void {
     this.pendingCaps = caps;
     if (this.reconfigureTimer) return;
