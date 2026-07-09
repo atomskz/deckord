@@ -37,9 +37,10 @@ OpenDeck host ──launch(-port,-pluginUUID,-registerEvent)──▶ relay.mjs
 
 ## Open items (skeleton)
 
-- **Packaging / launch:** `relay.mjs` needs a runtime with a global `WebSocket`
-  (Node >= 22) on PATH, or to be bundled/compiled into an executable that the host
-  can launch directly. Ship a per-OS `CodePath`/launcher.
+- **Packaging / launch:** per-OS launchers ship — `relay.sh` (`CodePath`, Linux/macOS)
+  and `relay.cmd` (`CodePathWin`, Windows) both invoke `node relay.mjs`. They still
+  require **Node >= 22 on PATH** (for the global `WebSocket`); bundling a runtime so
+  the plugin starts with no system Node is future work.
 - **Icons:** `icons/plugin`, `icons/slot`, `icons/status` are placeholders.
 - **Property Inspector:** a small HTML PI showing Deckord-service connection status
   (and a `Participant` / `Status-Page` role) is not built yet.
