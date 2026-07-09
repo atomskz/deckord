@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DeckButtonEvent, RenderedDeckSlot } from '@deckord/shared';
 import type { DeckCapabilities } from '@deckord/deck-adapter';
 import { OpenDeckAdapter } from './OpenDeckAdapter';
@@ -13,11 +13,15 @@ class FakeLink implements ElgatoLink {
   onFrame(h: (frame: unknown) => void): void {
     this.frameHandler = h;
   }
-  onClose(): void {
-    /* not used here */
+  private closeHandler?: () => void;
+  onClose(h: () => void): void {
+    this.closeHandler = h;
   }
   feed(frame: unknown): void {
     this.frameHandler?.(frame);
+  }
+  close(): void {
+    this.closeHandler?.();
   }
 }
 
@@ -132,5 +136,59 @@ describe('OpenDeckAdapter', () => {
     link.feed({ event: 'willDisappear', context: 'a', device: 'd1' });
     expect(adapter.getCapabilities().slotCount).toBe(1);
     expect(caps.at(-1)?.slotCount).toBe(1);
+  });
+
+  describe('heartbeat re-push (recovers OpenDeck silent key resets)', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('re-asserts the last image on every interval while running', async () => {
+      vi.useFakeTimers();
+      const link = new FakeLink();
+      const adapter = new OpenDeckAdapter(new OpenDeckPluginTransport(link), {
+        iconSize: 72,
+        repaintIntervalMs: 1000,
+      });
+      link.feed(appear('a', 0, 0));
+      await adapter.setSlot(0, userSlot(0, 'Nova'));
+      await adapter.start();
+      link.sent.length = 0;
+
+      vi.advanceTimersByTime(1000);
+      const rePushed = link.sent.filter((f) => f.event === 'setImage' && f.context === 'a');
+      expect(rePushed).toHaveLength(1);
+
+      await adapter.stop();
+      link.sent.length = 0;
+      vi.advanceTimersByTime(3000);
+      expect(link.sent.filter((f) => f.event === 'setImage')).toHaveLength(0);
+    });
+
+    it('is disabled when repaintIntervalMs is 0', async () => {
+      vi.useFakeTimers();
+      const link = new FakeLink();
+      const adapter = new OpenDeckAdapter(new OpenDeckPluginTransport(link), { repaintIntervalMs: 0 });
+      link.feed(appear('a', 0, 0));
+      await adapter.setSlot(0, userSlot(0, 'Nova'));
+      await adapter.start();
+      link.sent.length = 0;
+      vi.advanceTimersByTime(10000);
+      expect(link.sent).toHaveLength(0);
+      await adapter.stop();
+    });
+  });
+
+  it('drops all learned state on transport close (reconnect hygiene)', () => {
+    const link = new FakeLink();
+    const adapter = new OpenDeckAdapter(new OpenDeckPluginTransport(link), { iconSize: 72 });
+    const caps: DeckCapabilities[] = [];
+    adapter.onCapabilitiesChanged((c) => caps.push(c));
+    link.feed(appear('a', 0, 0));
+    link.feed(appear('b', 1, 0));
+    expect(adapter.getCapabilities().slotCount).toBe(2);
+
+    link.close();
+
+    expect(adapter.getCapabilities().slotCount).toBe(0);
+    expect(caps.at(-1)?.slotCount).toBe(0);
   });
 });

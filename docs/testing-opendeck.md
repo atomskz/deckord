@@ -81,6 +81,7 @@ Useful knobs (all optional — [config/index.ts](../apps/deckord-service/src/con
 | `DECKORD_OPENDECK` | `false` | Alternative opt-in that opens the endpoint without forcing adapter selection. |
 | `DECKORD_OPENDECK_PORT` | `8788` | Relay endpoint port (must match the relay's `DECKORD_OPENDECK_URL`). |
 | `DECKORD_OPENDECK_ICON` | `96` | Square key image size in px rasterized for each key. |
+| `DECKORD_OPENDECK_REPAINT_MS` | `2000` | How often to re-assert key images. OpenDeck silently resets keys to the action's default icon on a profile edit (adding any widget) without notifying the plugin, so a periodic re-push is the only way to recover them. `0` disables it. |
 
 > Tip: you can run the **browser debug deck at the same time** (`pnpm dev`) — the
 > service drives all outputs at once, so the browser mirrors exactly what the

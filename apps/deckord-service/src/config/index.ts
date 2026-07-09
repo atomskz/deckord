@@ -27,6 +27,8 @@ export type DeckordConfig = {
     port: number;
     path: string;
     iconSize: number;
+    /** Interval (ms) to re-assert key images; recovers OpenDeck's silent key resets. */
+    repaintMs: number;
   };
   /** Root data directory (settings.json, secrets, token, avatars live under here). */
   dataDir: string;
@@ -87,6 +89,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DeckordConfig 
       port: num(env.DECKORD_OPENDECK_PORT, 8788),
       path: env.DECKORD_OPENDECK_PATH ?? '/opendeck',
       iconSize: num(env.DECKORD_OPENDECK_ICON, 96),
+      repaintMs: num(env.DECKORD_OPENDECK_REPAINT_MS, 2000),
     },
     dataDir,
     discordTokenPath: env.DECKORD_TOKEN_PATH ?? path.join(dataDir, 'discord-token.json'),

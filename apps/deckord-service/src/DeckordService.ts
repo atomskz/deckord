@@ -107,6 +107,7 @@ export class DeckordService {
           theme: DEFAULT_THEME,
           iconSize: config.openDeck.iconSize,
           resolveAvatar: this.resolveDeckAvatar,
+          repaintIntervalMs: config.openDeck.repaintMs,
         }),
       );
     }

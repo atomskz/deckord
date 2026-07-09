@@ -17,6 +17,13 @@ export type OpenDeckAdapterOptions = {
   /** Square key image size in px (default 96). Later derived from the device type. */
   iconSize?: number;
   resolveAvatar?: OpenDeckAvatarResolver;
+  /**
+   * How often (ms) to re-assert the current key images. OpenDeck silently resets
+   * keys to the action's default icon on a profile edit (adding any widget) WITHOUT
+   * sending the plugin any event, so there is nothing to react to — a low-frequency
+   * re-push is the only way to recover those keys. 0 disables it. Default 2000.
+   */
+  repaintIntervalMs?: number;
 };
 
 type ContextInfo = { device: string; coordinates?: ElgatoCoordinates; controller: ElgatoController };
@@ -34,6 +41,8 @@ export class OpenDeckAdapter implements IDeckAdapter {
   private readonly images: SlotImageRenderer;
   private readonly iconSize: number;
   private readonly resolveAvatar?: OpenDeckAvatarResolver;
+  private readonly repaintIntervalMs: number;
+  private heartbeat: ReturnType<typeof setInterval> | undefined;
 
   private readonly devices = new Map<string, ElgatoDeviceInfo>();
   private readonly contexts = new Map<string, ContextInfo>();
@@ -53,6 +62,7 @@ export class OpenDeckAdapter implements IDeckAdapter {
   ) {
     this.iconSize = options.iconSize ?? 96;
     this.resolveAvatar = options.resolveAvatar;
+    this.repaintIntervalMs = options.repaintIntervalMs ?? 2000;
     this.images = new SlotImageRenderer({ theme: options.theme, size: this.iconSize });
 
     transport.onDeviceConnect(({ device, info }) => {
@@ -91,13 +101,25 @@ export class OpenDeckAdapter implements IDeckAdapter {
     });
     transport.onKeyDown((context) => this.emitButton('down', context));
     transport.onKeyUp((context) => this.emitButton('up', context));
+    // Relay/service dropped: forget all device/context state so a reconnect rebuilds
+    // it cleanly from fresh willAppear frames (no stale contexts or key images).
+    transport.onClose(() => this.handleDisconnect());
   }
 
   async start(): Promise<void> {
-    /* The relay/WS lifecycle is owned by the service. */
+    // Periodically re-assert current key images: OpenDeck resets keys to the action
+    // default on a profile edit without notifying the plugin, so there is no event to
+    // react to — only a re-push recovers them. Cheap: re-sends cached PNGs, no render.
+    if (this.repaintIntervalMs > 0 && !this.heartbeat) {
+      this.heartbeat = setInterval(() => this.repushAll(), this.repaintIntervalMs);
+      this.heartbeat.unref?.();
+    }
   }
   async stop(): Promise<void> {
-    /* no-op */
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
+    }
   }
 
   getLayoutSpec(): DeckLayoutSpec {
@@ -164,6 +186,24 @@ export class OpenDeckAdapter implements IDeckAdapter {
   }
 
   // --- internal ------------------------------------------------------------
+
+  /** Re-send the last image for every assigned key, recovering silent host resets. */
+  private repushAll(): void {
+    for (const context of this.keypadOrder) {
+      const image = this.lastImage.get(context);
+      if (image) this.transport.setImage(context, image);
+    }
+  }
+
+  /** Forget all learned state on a relay/service disconnect (reconnect hygiene). */
+  private handleDisconnect(): void {
+    this.devices.clear();
+    this.contexts.clear();
+    this.lastImage.clear();
+    // recompute() rebuilds keypadOrder from the (now empty) contexts and fires a
+    // capability change (slotCount → 0) so deck-core stops targeting stale keys.
+    this.recompute();
+  }
 
   private emitButton(kind: DeckButtonEventKind, context: string): void {
     const slotIndex = this.keypadOrder.indexOf(context);

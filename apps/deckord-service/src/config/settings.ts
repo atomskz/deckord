@@ -103,6 +103,7 @@ export function mergeConfig(base: DeckordConfig, s: DeckordSettings): DeckordCon
       port: s.openDeck?.port ?? base.openDeck.port,
       path: base.openDeck.path,
       iconSize: s.openDeck?.iconSize ?? base.openDeck.iconSize,
+      repaintMs: base.openDeck.repaintMs,
     },
     mock: {
       autoStart: s.mock?.autoStart ?? base.mock.autoStart,
