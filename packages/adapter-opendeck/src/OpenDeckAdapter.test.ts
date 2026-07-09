@@ -87,6 +87,33 @@ describe('OpenDeckAdapter', () => {
     expect(events[0]!.deckId).toBe('opendeck');
   });
 
+  it('re-pushes the last image when a key re-appears (profile edit)', async () => {
+    const { link, adapter } = setup();
+    link.feed(appear('a', 0, 0));
+    link.feed(appear('b', 1, 0));
+    await adapter.setSlot(0, userSlot(0, 'Nova'));
+    const painted = link.sent.find((f) => f.event === 'setImage' && f.context === 'a');
+    expect(painted?.payload?.image?.startsWith('data:image/png;base64,')).toBe(true);
+    link.sent.length = 0;
+
+    // The host re-fires willAppear for the existing key (e.g. user drops another
+    // widget on the profile). Its cached image must be re-sent so it doesn't get
+    // stuck on the placeholder — even though the slot order is unchanged.
+    link.feed(appear('a', 0, 0));
+
+    const rePushed = link.sent.filter((f) => f.event === 'setImage' && f.context === 'a');
+    expect(rePushed).toHaveLength(1);
+    expect(rePushed[0]?.payload?.image).toBe(painted?.payload?.image);
+  });
+
+  it('does not re-push an image for a key it never painted', () => {
+    const { link, adapter } = setup();
+    link.feed(appear('a', 0, 0));
+    link.sent.length = 0;
+    link.feed(appear('a', 0, 0)); // re-appear before any setSlot
+    expect(link.sent.filter((f) => f.event === 'setImage')).toHaveLength(0);
+  });
+
   it('recomputes capabilities when a key is unassigned', () => {
     const { link, adapter, caps } = setup();
     link.feed(appear('a', 0, 0));

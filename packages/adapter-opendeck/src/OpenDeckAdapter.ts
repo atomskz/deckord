@@ -39,6 +39,8 @@ export class OpenDeckAdapter implements IDeckAdapter {
   private readonly contexts = new Map<string, ContextInfo>();
   private keypadOrder: string[] = []; // slotIndex → context
   private lastKnobCount = 0;
+  /** Last image pushed per context, so we can re-paint on re-appearance. */
+  private readonly lastImage = new Map<string, string>();
 
   private readonly downHandlers: DeckButtonHandler[] = [];
   private readonly upHandlers: DeckButtonHandler[] = [];
@@ -57,15 +59,29 @@ export class OpenDeckAdapter implements IDeckAdapter {
     });
     transport.onDeviceDisconnect((device) => {
       this.devices.delete(device);
-      for (const [ctx, info] of this.contexts) if (info.device === device) this.contexts.delete(ctx);
+      for (const [ctx, info] of this.contexts) {
+        if (info.device === device) {
+          this.contexts.delete(ctx);
+          this.lastImage.delete(ctx);
+        }
+      }
       this.recompute();
     });
     transport.onWillAppear((a) => {
       this.contexts.set(a.context, { device: a.device, coordinates: a.coordinates, controller: a.controller });
+      // Elgato/OpenDeck resets a key to the action's default icon whenever it
+      // (re)appears — which also happens when the user edits the profile (adds any
+      // widget), re-firing willAppear for every visible key. If the slot order is
+      // unchanged that produces no capability change and thus no re-render, so the
+      // keys would stay stuck on the placeholder. Re-push the last image we sent for
+      // this context immediately so it survives a re-appearance.
+      const cached = this.lastImage.get(a.context);
+      if (cached) this.transport.setImage(a.context, cached);
       this.recompute();
     });
     transport.onWillDisappear((context) => {
       this.contexts.delete(context);
+      this.lastImage.delete(context);
       this.recompute();
     });
     transport.onKeyDown((context) => this.emitButton('down', context));
@@ -109,6 +125,7 @@ export class OpenDeckAdapter implements IDeckAdapter {
       const avatar = this.resolveAvatar ? await this.resolveAvatar(slot) : undefined;
       const dataUrl = await this.images.renderToDataUrl(slot, avatar);
       this.transport.setImage(context, dataUrl);
+      this.lastImage.set(context, dataUrl);
     } catch {
       // A per-slot avatar/rasterize failure must not abort the host's batch (it
       // awaits setSlot for every changed slot); skip this key, repaint next update.
@@ -117,11 +134,17 @@ export class OpenDeckAdapter implements IDeckAdapter {
 
   async clearSlot(slotIndex: number): Promise<void> {
     const context = this.keypadOrder[slotIndex];
-    if (context) this.transport.clearImage(context);
+    if (context) {
+      this.transport.clearImage(context);
+      this.lastImage.delete(context);
+    }
   }
 
   async clearAll(): Promise<void> {
-    for (const context of this.keypadOrder) this.transport.clearImage(context);
+    for (const context of this.keypadOrder) {
+      this.transport.clearImage(context);
+      this.lastImage.delete(context);
+    }
   }
 
   onButtonDown(handler: DeckButtonHandler): void {
