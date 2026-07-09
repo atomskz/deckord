@@ -1,0 +1,30 @@
+{
+  "Name": "Deckord Image Test",
+  "Version": "0.0.1",
+  "Author": "atomskz",
+  "Description": "Debug tool: sets a distinctive image on key press and NEVER repaints on appearance, so profile edits and device reconnects reveal whether OpenDeck keeps the image or reverts to the action default.",
+  "Category": "Deckord Test",
+  "CategoryIcon": "icons/plugin",
+  "Icon": "icons/plugin",
+  "CodePath": "test.sh",
+  "CodePathWin": "test.cmd",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.0"
+  },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "11" },
+    { "Platform": "linux", "MinimumVersion": "0" }
+  ],
+  "Actions": [
+    {
+      "UUID": "io.github.atomskz.imagetest.key",
+      "Name": "Static Image Test",
+      "Icon": "icons/action",
+      "Tooltip": "Press to set a distinctive numbered image. Does not repaint on appearance.",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "icons/action" }]
+    }
+  ]
+}
